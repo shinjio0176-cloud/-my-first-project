@@ -309,11 +309,11 @@
     <div class="cards" id="summaryCards"></div>
 
     <div class="panel">
-      <h2>月次売上・利益 <span class="hint">直近12ヶ月</span></h2>
+      <h2>月次売上・現金利益 <span class="hint">直近12ヶ月／ポイントを含まない金額</span></h2>
       <div class="bar-chart" id="monthlyChart"></div>
       <div class="legend">
         <span><i style="background:var(--accent-soft)"></i>売上</span>
-        <span><i style="background:var(--accent)"></i>利益</span>
+        <span><i style="background:var(--accent)"></i>現金利益</span>
       </div>
     </div>
 
@@ -326,7 +326,7 @@
       <h2>年次サマリー</h2>
       <div class="table-wrap">
         <table id="yearlyTable">
-          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">利益</th><th class="num">利益率</th></tr></thead>
+          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">現金利益</th><th class="num">ポイント込み利益</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -362,7 +362,9 @@
               <th class="num">販売額</th>
               <th class="num">手数料</th>
               <th class="num">送料</th>
-              <th class="num">利益</th>
+              <th class="num">ポイント</th>
+              <th class="num">現金利益</th>
+              <th class="num">ポイント込み利益</th>
               <th>仕入日</th>
               <th>販売日</th>
               <th></th>
@@ -392,7 +394,7 @@
         <input type="file" id="fileImportCsv" accept=".csv,text/csv" style="display:none;">
       </footer>
       <p class="note" style="margin-top:10px;">
-        列の意味: 商品名 / 仕入先 / プラットフォーム / ステータス（在庫・出品中・売却済みのいずれか） / 仕入日（例: 2026-07-01） / 仕入額 / 販売日 / 販売額 / 手数料 / 送料 / メモ。
+        列の意味: 商品名 / 仕入先 / プラットフォーム / ステータス（在庫・出品中・売却済みのいずれか） / 仕入日（例: 2026-07-01） / 仕入額 / 販売日 / 販売額 / 手数料 / 送料 / 獲得ポイント（楽天ポイント・PayPayポイント等を円換算） / メモ。
         「商品名」以外は空欄でも構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
       </p>
     </div>
@@ -469,6 +471,10 @@
         <input type="number" id="f_shipping" min="0" step="1" placeholder="0">
       </div>
       <div class="field full">
+        <label>獲得ポイント（円換算・楽天ポイント/PayPayポイント等）</label>
+        <input type="number" id="f_points" min="0" step="1" placeholder="0">
+      </div>
+      <div class="field full">
         <label>メモ</label>
         <input type="text" id="f_memo" placeholder="任意">
       </div>
@@ -539,6 +545,12 @@
     return sale - cost - fee - ship;
   }
 
+  function totalProfitOf(item) {
+    var cash = profitOf(item);
+    if (cash === null) return null;
+    return cash + (Number(item.points) || 0);
+  }
+
   function monthKey(dateStr) {
     if (!dateStr) return null;
     return dateStr.slice(0, 7); // YYYY-MM
@@ -593,18 +605,22 @@
 
     var monthSold = soldItems.filter(function (i) { return monthKey(i.saleDate) === curMonthKey; });
     var monthRevenue = monthSold.reduce(function (s, i) { return s + (Number(i.salePrice) || 0); }, 0);
-    var monthProfit = monthSold.reduce(function (s, i) { return s + profitOf(i); }, 0);
+    var monthCashProfit = monthSold.reduce(function (s, i) { return s + profitOf(i); }, 0);
+    var monthTotalProfit = monthSold.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
 
     var stockItems = state.items.filter(function (i) { return i.status === "stock" || i.status === "listed"; });
     var stockValue = stockItems.reduce(function (s, i) { return s + (Number(i.purchasePrice) || 0); }, 0);
 
-    var totalProfit = soldItems.reduce(function (s, i) { return s + profitOf(i); }, 0);
+    var totalCashProfit = soldItems.reduce(function (s, i) { return s + profitOf(i); }, 0);
+    var totalPointProfit = soldItems.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
 
     var cards = [
       { label: "今月の売上", value: yen(monthRevenue) },
-      { label: "今月の利益", value: yen(monthProfit), cls: monthProfit >= 0 ? "profit" : "loss" },
+      { label: "今月の利益（現金のみ）", value: yen(monthCashProfit), cls: monthCashProfit >= 0 ? "profit" : "loss" },
+      { label: "今月の利益（ポイント込み）", value: yen(monthTotalProfit), cls: monthTotalProfit >= 0 ? "profit" : "loss" },
       { label: "在庫件数 / 在庫仕入額", value: stockItems.length + "件 / " + yen(stockValue) },
-      { label: "累計利益", value: yen(totalProfit), cls: totalProfit >= 0 ? "profit" : "loss" }
+      { label: "累計利益（現金のみ）", value: yen(totalCashProfit), cls: totalCashProfit >= 0 ? "profit" : "loss" },
+      { label: "累計利益（ポイント込み）", value: yen(totalPointProfit), cls: totalPointProfit >= 0 ? "profit" : "loss" }
     ];
 
     document.getElementById("summaryCards").innerHTML = cards.map(function (c) {
@@ -691,27 +707,29 @@
     soldItems.forEach(function (item) {
       var y = yearKey(item.saleDate);
       if (!y) return;
-      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, profit: 0 };
+      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, points: 0, cashProfit: 0, totalProfit: 0 };
       byYear[y].revenue += Number(item.salePrice) || 0;
       byYear[y].cost += Number(item.purchasePrice) || 0;
       byYear[y].feeShip += (Number(item.fee) || 0) + (Number(item.shipping) || 0);
-      byYear[y].profit += profitOf(item);
+      byYear[y].points += Number(item.points) || 0;
+      byYear[y].cashProfit += profitOf(item);
+      byYear[y].totalProfit += totalProfitOf(item);
     });
     var years = Object.keys(byYear).sort().reverse();
     var tbody = document.querySelector("#yearlyTable tbody");
     if (!years.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
       return;
     }
     tbody.innerHTML = years.map(function (y) {
       var r = byYear[y];
-      var margin = r.revenue ? Math.round((r.profit / r.revenue) * 1000) / 10 : 0;
       return "<tr><td>" + y + "年</td>" +
         '<td class="num">' + yen(r.revenue) + "</td>" +
         '<td class="num">' + yen(r.cost) + "</td>" +
         '<td class="num">' + yen(r.feeShip) + "</td>" +
-        '<td class="num ' + (r.profit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.profit) + "</td>" +
-        '<td class="num">' + margin + "%</td></tr>";
+        '<td class="num">' + yen(r.points) + "</td>" +
+        '<td class="num ' + (r.cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.cashProfit) + "</td>" +
+        '<td class="num ' + (r.totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.totalProfit) + "</td></tr>";
     }).join("");
   }
 
@@ -748,9 +766,12 @@
     emptyState.style.display = "none";
 
     tbody.innerHTML = filtered.map(function (item) {
-      var profit = profitOf(item);
-      var profitCell = profit === null ? "—" : yen(profit);
-      var profitCls = profit === null ? "" : (profit >= 0 ? "profit-cell profit" : "profit-cell loss");
+      var cashProfit = profitOf(item);
+      var totalProfit = totalProfitOf(item);
+      var cashCell = cashProfit === null ? "—" : yen(cashProfit);
+      var cashCls = cashProfit === null ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+      var totalCell = totalProfit === null ? "—" : yen(totalProfit);
+      var totalCls = totalProfit === null ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
       return "<tr>" +
         "<td>" + escapeHtml(item.name) + "</td>" +
         "<td>" + escapeHtml(item.supplier || "—") + "</td>" +
@@ -760,7 +781,9 @@
         '<td class="num">' + (item.status === "sold" ? yen(item.salePrice) : "—") + "</td>" +
         '<td class="num">' + (item.status === "sold" ? yen(item.fee) : "—") + "</td>" +
         '<td class="num">' + (item.status === "sold" ? yen(item.shipping) : "—") + "</td>" +
-        '<td class="num ' + profitCls + '">' + profitCell + "</td>" +
+        '<td class="num">' + (item.status === "sold" ? yen(item.points) : "—") + "</td>" +
+        '<td class="num ' + cashCls + '">' + cashCell + "</td>" +
+        '<td class="num ' + totalCls + '">' + totalCell + "</td>" +
         "<td>" + (item.purchaseDate || "—") + "</td>" +
         "<td>" + (item.saleDate || "—") + "</td>" +
         '<td><button class="icon-btn edit" data-id="' + item.id + '">編集</button><button class="icon-btn del" data-id="' + item.id + '">削除</button></td>' +
@@ -803,6 +826,7 @@
     document.getElementById("f_salePrice").value = item && item.salePrice != null ? item.salePrice : "";
     document.getElementById("f_fee").value = item && item.fee != null ? item.fee : "";
     document.getElementById("f_shipping").value = item && item.shipping != null ? item.shipping : "";
+    document.getElementById("f_points").value = item && item.points != null ? item.points : "";
     document.getElementById("f_memo").value = item ? item.memo || "" : "";
 
     backdrop.classList.add("active");
@@ -835,6 +859,7 @@
       salePrice: document.getElementById("f_salePrice").value === "" ? null : Number(document.getElementById("f_salePrice").value),
       fee: document.getElementById("f_fee").value === "" ? 0 : Number(document.getElementById("f_fee").value),
       shipping: document.getElementById("f_shipping").value === "" ? 0 : Number(document.getElementById("f_shipping").value),
+      points: document.getElementById("f_points").value === "" ? 0 : Number(document.getElementById("f_points").value),
       memo: document.getElementById("f_memo").value.trim()
     };
 
@@ -891,7 +916,7 @@
   });
 
   // ---------- CSV template / import ----------
-  var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "手数料", "送料", "メモ"];
+  var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "手数料", "送料", "獲得ポイント", "メモ"];
   var STATUS_FROM_LABEL = { "在庫": "stock", "出品中": "listed", "売却済み": "sold" };
 
   function csvEscape(v) {
@@ -902,8 +927,9 @@
 
   function buildTemplateCsv() {
     var exampleRows = [
-      ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "2026-06-01", "15000", "2026-06-10", "22000", "2200", "700", "動作確認済み"],
-      ["未使用ゲームソフト", "ブックオフ〇〇店", "Amazon", "在庫", "2026-07-01", "800", "", "", "", "", ""]
+      ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "2026-06-01", "15000", "2026-06-10", "22000", "2200", "700", "0", "動作確認済み"],
+      ["未使用ゲームソフト", "ブックオフ〇〇店", "楽天市場", "売却済み", "2026-06-20", "800", "2026-06-25", "1800", "100", "0", "18", "楽天ポイント18pt獲得"],
+      ["未使用ゲームソフト2", "ブックオフ〇〇店", "Amazon", "在庫", "2026-07-01", "800", "", "", "", "", "", ""]
     ];
     var rows = [CSV_HEADERS].concat(exampleRows);
     return rows.map(function (r) { return r.map(csvEscape).join(","); }).join("\r\n");
@@ -1006,7 +1032,8 @@
         var salePrice = r[7] !== undefined && String(r[7]).trim() !== "" ? parseNumberLoose(r[7]) : null;
         var fee = parseNumberLoose(r[8]);
         var shipping = parseNumberLoose(r[9]);
-        var memo = (r[10] || "").trim();
+        var points = parseNumberLoose(r[10]);
+        var memo = (r[11] || "").trim();
 
         var status = STATUS_FROM_LABEL[statusLabel];
         if (!status) status = salePrice != null ? "sold" : "stock";
@@ -1027,6 +1054,7 @@
           salePrice: salePrice,
           fee: fee,
           shipping: shipping,
+          points: points,
           memo: memo
         });
         imported++;
