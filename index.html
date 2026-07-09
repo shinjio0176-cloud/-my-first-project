@@ -378,6 +378,25 @@
   <!-- Data management -->
   <section class="view" id="view-data">
     <div class="panel">
+      <h2>Excelからまとめて登録</h2>
+      <p class="note">
+        今まで使っていたExcelの商品データを、まとめてこのアプリに取り込めます。手順は次の通りです。<br>
+        ① 下の「CSVテンプレートをダウンロード」を押して、見本ファイルを保存する<br>
+        ② そのファイルをExcelで開き、見本の行を参考にして自分のデータを入力する（1行が商品1件）<br>
+        ③ Excelで「名前を付けて保存」→ ファイルの種類を「CSV UTF-8（コンマ区切り）」にして保存する<br>
+        ④ 「CSVファイルを選択」ボタンから、保存したファイルを選ぶと自動で取り込まれます
+      </p>
+      <footer class="data-actions">
+        <button class="btn secondary" id="btnDownloadTemplate">CSVテンプレートをダウンロード</button>
+        <button class="btn" id="btnImportCsvTrigger">CSVファイルを選択</button>
+        <input type="file" id="fileImportCsv" accept=".csv,text/csv" style="display:none;">
+      </footer>
+      <p class="note" style="margin-top:10px;">
+        列の意味: 商品名 / 仕入先 / プラットフォーム / ステータス（在庫・出品中・売却済みのいずれか） / 仕入日（例: 2026-07-01） / 仕入額 / 販売日 / 販売額 / 手数料 / 送料 / メモ。
+        「商品名」以外は空欄でも構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
+      </p>
+    </div>
+    <div class="panel">
       <h2>データのエクスポート／インポート</h2>
       <p class="note">全データはブラウザの localStorage にのみ保存されます。他の端末に移す場合や、バックアップを取る場合は JSON ファイルとして書き出してください。</p>
       <footer class="data-actions">
@@ -869,6 +888,167 @@
     input.value = "";
     populatePlatformSelects();
     renderPlatformList();
+  });
+
+  // ---------- CSV template / import ----------
+  var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "手数料", "送料", "メモ"];
+  var STATUS_FROM_LABEL = { "在庫": "stock", "出品中": "listed", "売却済み": "sold" };
+
+  function csvEscape(v) {
+    v = v == null ? "" : String(v);
+    if (/[",\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }
+
+  function buildTemplateCsv() {
+    var exampleRows = [
+      ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "2026-06-01", "15000", "2026-06-10", "22000", "2200", "700", "動作確認済み"],
+      ["未使用ゲームソフト", "ブックオフ〇〇店", "Amazon", "在庫", "2026-07-01", "800", "", "", "", "", ""]
+    ];
+    var rows = [CSV_HEADERS].concat(exampleRows);
+    return rows.map(function (r) { return r.map(csvEscape).join(","); }).join("\r\n");
+  }
+
+  document.getElementById("btnDownloadTemplate").addEventListener("click", function () {
+    var csv = "﻿" + buildTemplateCsv();
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "sedori-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // Minimal RFC4180-style CSV parser (handles quoted fields, escaped quotes, commas/newlines inside quotes)
+  function parseCsv(text) {
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else {
+        if (c === '"') {
+          inQuotes = true;
+        } else if (c === ",") {
+          row.push(field); field = "";
+        } else if (c === "\n") {
+          row.push(field); field = "";
+          rows.push(row); row = [];
+        } else if (c === "\r") {
+          // skip, \n (or end) will terminate the row
+        } else {
+          field += c;
+        }
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (v) { return v !== ""; }); });
+  }
+
+  function parseFlexibleDate(v) {
+    v = (v || "").trim();
+    if (!v) return null;
+    var m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (!m) return null;
+    var pad = function (n) { return n.length === 1 ? "0" + n : n; };
+    return m[1] + "-" + pad(m[2]) + "-" + pad(m[3]);
+  }
+
+  function parseNumberLoose(v) {
+    if (v == null || v === "") return 0;
+    var n = Number(String(v).replace(/[¥,\s]/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+
+  document.getElementById("btnImportCsvTrigger").addEventListener("click", function () {
+    document.getElementById("fileImportCsv").click();
+  });
+
+  document.getElementById("fileImportCsv").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var text = reader.result.replace(/^﻿/, "");
+      var rows = parseCsv(text);
+      if (!rows.length) {
+        alert("CSVファイルにデータが見つかりませんでした。");
+        e.target.value = "";
+        return;
+      }
+      // Skip header row if it looks like our template header
+      var first = rows[0];
+      if (first[0] === "商品名") rows = rows.slice(1);
+
+      var imported = 0, skipped = 0;
+      var newPlatforms = [];
+
+      rows.forEach(function (r) {
+        var name = (r[0] || "").trim();
+        if (!name) { skipped++; return; }
+        var supplier = (r[1] || "").trim();
+        var platform = (r[2] || "").trim() || state.platforms[0];
+        var statusLabel = (r[3] || "").trim();
+        var purchaseDate = parseFlexibleDate(r[4]) || "";
+        var purchasePrice = parseNumberLoose(r[5]);
+        var saleDate = parseFlexibleDate(r[6]);
+        var salePrice = r[7] !== undefined && String(r[7]).trim() !== "" ? parseNumberLoose(r[7]) : null;
+        var fee = parseNumberLoose(r[8]);
+        var shipping = parseNumberLoose(r[9]);
+        var memo = (r[10] || "").trim();
+
+        var status = STATUS_FROM_LABEL[statusLabel];
+        if (!status) status = salePrice != null ? "sold" : "stock";
+
+        if (state.platforms.indexOf(platform) === -1 && newPlatforms.indexOf(platform) === -1) {
+          newPlatforms.push(platform);
+        }
+
+        state.items.push({
+          id: uid(),
+          name: name,
+          supplier: supplier,
+          platform: platform,
+          status: status,
+          purchaseDate: purchaseDate,
+          purchasePrice: purchasePrice,
+          saleDate: saleDate,
+          salePrice: salePrice,
+          fee: fee,
+          shipping: shipping,
+          memo: memo
+        });
+        imported++;
+      });
+
+      if (newPlatforms.length) {
+        state.platforms = state.platforms.concat(newPlatforms);
+        savePlatforms();
+        populatePlatformSelects();
+      }
+
+      save();
+      renderItemsView();
+      renderDashboard();
+      renderPlatformList();
+
+      var msg = imported + "件のデータを取り込みました。";
+      if (skipped) msg += "（商品名が空欄の行" + skipped + "件はスキップしました）";
+      alert(msg);
+      e.target.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
   });
 
   // ---------- data export / import / clear ----------
