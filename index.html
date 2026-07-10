@@ -299,6 +299,7 @@
 <nav>
   <button data-view="dashboard" class="active">ダッシュボード</button>
   <button data-view="items">商品一覧</button>
+  <button data-view="expenses">費用管理</button>
   <button data-view="data">データ管理</button>
 </nav>
 
@@ -323,10 +324,10 @@
     </div>
 
     <div class="panel">
-      <h2>年次サマリー</h2>
+      <h2>年次サマリー <span class="hint">費用（固定費+変動費）差引後の純利益</span></h2>
       <div class="table-wrap">
         <table id="yearlyTable">
-          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">現金利益</th><th class="num">ポイント込み利益</th></tr></thead>
+          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（ポイント込み）</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -373,6 +374,54 @@
           <tbody></tbody>
         </table>
         <div class="empty-state" id="itemsEmpty" style="display:none;">登録された商品がありません。「新規登録」から追加してください。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Expenses -->
+  <section class="view" id="view-expenses">
+    <div class="cards" id="expenseSummaryCards"></div>
+
+    <div class="toolbar">
+      <div class="spacer"></div>
+      <button class="btn" id="btnNewExpense">＋ 費用を登録</button>
+    </div>
+
+    <div class="panel" style="padding:0;">
+      <h2 style="padding:16px 16px 0;">固定費</h2>
+      <div class="table-wrap">
+        <table id="fixedExpenseTable">
+          <thead>
+            <tr>
+              <th>利用日</th>
+              <th>費用項目</th>
+              <th>詳細 / MEMO</th>
+              <th class="num">金額</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="fixedExpenseEmpty" style="display:none;">登録された固定費がありません。</div>
+      </div>
+    </div>
+
+    <div class="panel" style="padding:0;">
+      <h2 style="padding:16px 16px 0;">変動費</h2>
+      <div class="table-wrap">
+        <table id="variableExpenseTable">
+          <thead>
+            <tr>
+              <th>利用日</th>
+              <th>費用項目</th>
+              <th>詳細 / MEMO</th>
+              <th class="num">金額</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="variableExpenseEmpty" style="display:none;">登録された変動費がありません。</div>
       </div>
     </div>
   </section>
@@ -486,19 +535,63 @@
   </div>
 </div>
 
+<!-- Expense modal -->
+<div class="modal-backdrop" id="expenseModalBackdrop">
+  <div class="modal">
+    <h3 id="expenseModalTitle">費用を登録</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label>種別</label>
+        <select id="ex_type">
+          <option value="fixed">固定費</option>
+          <option value="variable">変動費</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>費用項目</label>
+        <select id="ex_category"></select>
+      </div>
+      <div class="field">
+        <label>利用日</label>
+        <input type="date" id="ex_date">
+      </div>
+      <div class="field">
+        <label>金額（円）</label>
+        <input type="number" id="ex_amount" min="0" step="1" placeholder="0">
+      </div>
+      <div class="field full">
+        <label>詳細 / MEMO</label>
+        <input type="text" id="ex_memo" placeholder="任意">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="btnExpenseCancel">キャンセル</button>
+      <button class="btn" id="btnExpenseSave">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
 
   var STORAGE_KEY = "sedori_items_v1";
   var PLATFORM_KEY = "sedori_platforms_v1";
+  var EXPENSE_STORAGE_KEY = "sedori_expenses_v1";
   var DEFAULT_PLATFORMS = ["メルカリ", "Amazon", "ヤフオク", "楽天", "その他"];
   var STATUS_LABEL = { stock: "在庫", listed: "出品中", sold: "売却済み" };
+  var EXPENSE_TYPE_LABEL = { fixed: "固定費", variable: "変動費" };
+  var EXPENSE_CATEGORIES = {
+    fixed: ["Amazon大口手数料", "Keepa", "その他ツール"],
+    variable: ["梱包費", "納品送料", "その他費用"]
+  };
 
   var state = {
     items: [],
     platforms: [],
-    editingId: null
+    expenses: [],
+    editingId: null,
+    editingExpenseId: null
   };
 
   // ---------- persistence ----------
@@ -516,6 +609,12 @@
       state.platforms = DEFAULT_PLATFORMS.slice();
     }
     if (!state.platforms.length) state.platforms = DEFAULT_PLATFORMS.slice();
+    try {
+      var rawE = localStorage.getItem(EXPENSE_STORAGE_KEY);
+      state.expenses = rawE ? JSON.parse(rawE) : [];
+    } catch (e) {
+      state.expenses = [];
+    }
   }
 
   function save() {
@@ -526,6 +625,10 @@
     localStorage.setItem(PLATFORM_KEY, JSON.stringify(state.platforms));
   }
 
+  function saveExpenses() {
+    localStorage.setItem(EXPENSE_STORAGE_KEY, JSON.stringify(state.expenses));
+  }
+
   // ---------- helpers ----------
   function uid() {
     return "id_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
@@ -533,7 +636,8 @@
 
   function yen(n) {
     n = Number(n) || 0;
-    return "¥" + n.toLocaleString("ja-JP");
+    var sign = n < 0 ? "-" : "";
+    return sign + "¥" + Math.abs(n).toLocaleString("ja-JP");
   }
 
   function profitOf(item) {
@@ -577,6 +681,7 @@
       document.getElementById("view-" + btn.dataset.view).classList.add("active");
       if (btn.dataset.view === "dashboard") renderDashboard();
       if (btn.dataset.view === "items") renderItemsView();
+      if (btn.dataset.view === "expenses") renderExpensesView();
       if (btn.dataset.view === "data") renderPlatformList();
     });
   });
@@ -598,6 +703,10 @@
   }
 
   // ---------- dashboard ----------
+  function expenseSum(list) {
+    return list.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+  }
+
   function renderDashboard() {
     var soldItems = state.items.filter(function (i) { return i.status === "sold"; });
     var now = new Date();
@@ -607,20 +716,29 @@
     var monthRevenue = monthSold.reduce(function (s, i) { return s + (Number(i.salePrice) || 0); }, 0);
     var monthCashProfit = monthSold.reduce(function (s, i) { return s + profitOf(i); }, 0);
     var monthTotalProfit = monthSold.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
+    var monthExpenses = expenseSum(state.expenses.filter(function (e) { return monthKey(e.date) === curMonthKey; }));
 
     var stockItems = state.items.filter(function (i) { return i.status === "stock" || i.status === "listed"; });
     var stockValue = stockItems.reduce(function (s, i) { return s + (Number(i.purchasePrice) || 0); }, 0);
 
     var totalCashProfit = soldItems.reduce(function (s, i) { return s + profitOf(i); }, 0);
     var totalPointProfit = soldItems.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
+    var totalExpenses = expenseSum(state.expenses);
+
+    var netMonthCash = monthCashProfit - monthExpenses;
+    var netMonthTotal = monthTotalProfit - monthExpenses;
+    var netTotalCash = totalCashProfit - totalExpenses;
+    var netTotalPoints = totalPointProfit - totalExpenses;
 
     var cards = [
       { label: "今月の売上", value: yen(monthRevenue) },
-      { label: "今月の利益（現金のみ）", value: yen(monthCashProfit), cls: monthCashProfit >= 0 ? "profit" : "loss" },
-      { label: "今月の利益（ポイント込み）", value: yen(monthTotalProfit), cls: monthTotalProfit >= 0 ? "profit" : "loss" },
+      { label: "今月の費用（固定費+変動費）", value: yen(monthExpenses) },
+      { label: "今月の純利益（現金・費用差引後）", value: yen(netMonthCash), cls: netMonthCash >= 0 ? "profit" : "loss" },
+      { label: "今月の純利益（ポイント込み・費用差引後）", value: yen(netMonthTotal), cls: netMonthTotal >= 0 ? "profit" : "loss" },
       { label: "在庫件数 / 在庫仕入額", value: stockItems.length + "件 / " + yen(stockValue) },
-      { label: "累計利益（現金のみ）", value: yen(totalCashProfit), cls: totalCashProfit >= 0 ? "profit" : "loss" },
-      { label: "累計利益（ポイント込み）", value: yen(totalPointProfit), cls: totalPointProfit >= 0 ? "profit" : "loss" }
+      { label: "累計費用（固定費+変動費）", value: yen(totalExpenses) },
+      { label: "累計純利益（現金・費用差引後）", value: yen(netTotalCash), cls: netTotalCash >= 0 ? "profit" : "loss" },
+      { label: "累計純利益（ポイント込み・費用差引後）", value: yen(netTotalPoints), cls: netTotalPoints >= 0 ? "profit" : "loss" }
     ];
 
     document.getElementById("summaryCards").innerHTML = cards.map(function (c) {
@@ -704,10 +822,13 @@
 
   function renderYearlyTable(soldItems) {
     var byYear = {};
+    function ensureYear(y) {
+      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, points: 0, expenses: 0, cashProfit: 0, totalProfit: 0 };
+    }
     soldItems.forEach(function (item) {
       var y = yearKey(item.saleDate);
       if (!y) return;
-      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, points: 0, cashProfit: 0, totalProfit: 0 };
+      ensureYear(y);
       byYear[y].revenue += Number(item.salePrice) || 0;
       byYear[y].cost += Number(item.purchasePrice) || 0;
       byYear[y].feeShip += (Number(item.fee) || 0) + (Number(item.shipping) || 0);
@@ -715,21 +836,30 @@
       byYear[y].cashProfit += profitOf(item);
       byYear[y].totalProfit += totalProfitOf(item);
     });
+    state.expenses.forEach(function (ex) {
+      var y = yearKey(ex.date);
+      if (!y) return;
+      ensureYear(y);
+      byYear[y].expenses += Number(ex.amount) || 0;
+    });
     var years = Object.keys(byYear).sort().reverse();
     var tbody = document.querySelector("#yearlyTable tbody");
     if (!years.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
       return;
     }
     tbody.innerHTML = years.map(function (y) {
       var r = byYear[y];
+      var netCash = r.cashProfit - r.expenses;
+      var netTotal = r.totalProfit - r.expenses;
       return "<tr><td>" + y + "年</td>" +
         '<td class="num">' + yen(r.revenue) + "</td>" +
         '<td class="num">' + yen(r.cost) + "</td>" +
         '<td class="num">' + yen(r.feeShip) + "</td>" +
         '<td class="num">' + yen(r.points) + "</td>" +
-        '<td class="num ' + (r.cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.cashProfit) + "</td>" +
-        '<td class="num ' + (r.totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.totalProfit) + "</td></tr>";
+        '<td class="num">' + yen(r.expenses) + "</td>" +
+        '<td class="num ' + (netCash >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(netCash) + "</td>" +
+        '<td class="num ' + (netTotal >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(netTotal) + "</td></tr>";
     }).join("");
   }
 
@@ -807,6 +937,134 @@
   document.getElementById("filterStatus").addEventListener("change", renderItemsView);
   document.getElementById("filterPlatform").addEventListener("change", renderItemsView);
   document.getElementById("filterSearch").addEventListener("input", renderItemsView);
+
+  // ---------- expenses view ----------
+  function renderExpensesView() {
+    var now = new Date();
+    var curMonthKey = now.toISOString().slice(0, 7);
+
+    var fixed = state.expenses.filter(function (e) { return e.type === "fixed"; });
+    var variable = state.expenses.filter(function (e) { return e.type === "variable"; });
+
+    renderExpenseTable(fixed, "fixedExpenseTable", "fixedExpenseEmpty");
+    renderExpenseTable(variable, "variableExpenseTable", "variableExpenseEmpty");
+
+    var monthFixed = fixed.filter(function (e) { return monthKey(e.date) === curMonthKey; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+    var monthVariable = variable.filter(function (e) { return monthKey(e.date) === curMonthKey; }).reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+    var totalFixed = fixed.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+    var totalVariable = variable.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+
+    var cards = [
+      { label: "今月の固定費", value: yen(monthFixed) },
+      { label: "今月の変動費", value: yen(monthVariable) },
+      { label: "今月の費用合計", value: yen(monthFixed + monthVariable) },
+      { label: "累計費用合計（固定費+変動費）", value: yen(totalFixed + totalVariable) }
+    ];
+    document.getElementById("expenseSummaryCards").innerHTML = cards.map(function (c) {
+      return '<div class="card"><div class="label">' + c.label + '</div><div class="value">' + c.value + "</div></div>";
+    }).join("");
+  }
+
+  function renderExpenseTable(list, tableId, emptyId) {
+    var sorted = list.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+    var tbody = document.querySelector("#" + tableId + " tbody");
+    var emptyState = document.getElementById(emptyId);
+
+    if (!sorted.length) {
+      tbody.innerHTML = "";
+      emptyState.style.display = "block";
+      return;
+    }
+    emptyState.style.display = "none";
+
+    tbody.innerHTML = sorted.map(function (ex) {
+      return "<tr>" +
+        "<td>" + (ex.date || "—") + "</td>" +
+        "<td>" + escapeHtml(ex.category) + "</td>" +
+        "<td>" + escapeHtml(ex.memo || "—") + "</td>" +
+        '<td class="num">' + yen(ex.amount) + "</td>" +
+        '<td><button class="icon-btn edit" data-id="' + ex.id + '">編集</button><button class="icon-btn del" data-id="' + ex.id + '">削除</button></td>' +
+      "</tr>";
+    }).join("");
+
+    tbody.querySelectorAll(".icon-btn.edit").forEach(function (btn) {
+      btn.addEventListener("click", function () { openExpenseModal(btn.dataset.id); });
+    });
+    tbody.querySelectorAll(".icon-btn.del").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (confirm("この費用データを削除しますか？")) {
+          state.expenses = state.expenses.filter(function (e) { return e.id !== btn.dataset.id; });
+          saveExpenses();
+          renderExpensesView();
+          renderDashboard();
+        }
+      });
+    });
+  }
+
+  // ---------- expense modal ----------
+  var expenseBackdrop = document.getElementById("expenseModalBackdrop");
+
+  function populateExpenseCategorySelect(type, selectedCategory) {
+    var sel = document.getElementById("ex_category");
+    var categories = EXPENSE_CATEGORIES[type] || [];
+    sel.innerHTML = categories.map(function (c) {
+      return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + "</option>";
+    }).join("");
+    if (selectedCategory && categories.indexOf(selectedCategory) !== -1) sel.value = selectedCategory;
+  }
+
+  document.getElementById("ex_type").addEventListener("change", function () {
+    populateExpenseCategorySelect(this.value, null);
+  });
+
+  function openExpenseModal(id) {
+    state.editingExpenseId = id || null;
+    var ex = id ? state.expenses.find(function (e) { return e.id === id; }) : null;
+
+    document.getElementById("expenseModalTitle").textContent = ex ? "費用を編集" : "費用を登録";
+    var type = ex ? ex.type : "variable";
+    document.getElementById("ex_type").value = type;
+    populateExpenseCategorySelect(type, ex ? ex.category : null);
+    document.getElementById("ex_date").value = ex ? ex.date || "" : new Date().toISOString().slice(0, 10);
+    document.getElementById("ex_amount").value = ex ? ex.amount : "";
+    document.getElementById("ex_memo").value = ex ? ex.memo || "" : "";
+
+    expenseBackdrop.classList.add("active");
+  }
+
+  function closeExpenseModal() {
+    expenseBackdrop.classList.remove("active");
+    state.editingExpenseId = null;
+  }
+
+  document.getElementById("btnNewExpense").addEventListener("click", function () { openExpenseModal(null); });
+  document.getElementById("btnExpenseCancel").addEventListener("click", closeExpenseModal);
+  expenseBackdrop.addEventListener("click", function (e) { if (e.target === expenseBackdrop) closeExpenseModal(); });
+
+  document.getElementById("btnExpenseSave").addEventListener("click", function () {
+    var amount = Number(document.getElementById("ex_amount").value) || 0;
+    var payload = {
+      type: document.getElementById("ex_type").value,
+      category: document.getElementById("ex_category").value,
+      date: document.getElementById("ex_date").value,
+      amount: amount,
+      memo: document.getElementById("ex_memo").value.trim()
+    };
+
+    if (state.editingExpenseId) {
+      var idx = state.expenses.findIndex(function (e) { return e.id === state.editingExpenseId; });
+      if (idx !== -1) state.expenses[idx] = Object.assign({ id: state.editingExpenseId }, payload);
+    } else {
+      payload.id = uid();
+      state.expenses.push(payload);
+    }
+
+    saveExpenses();
+    closeExpenseModal();
+    renderExpensesView();
+    renderDashboard();
+  });
 
   // ---------- item modal ----------
   var backdrop = document.getElementById("itemModalBackdrop");
@@ -1081,7 +1339,7 @@
 
   // ---------- data export / import / clear ----------
   document.getElementById("btnExport").addEventListener("click", function () {
-    var payload = { items: state.items, platforms: state.platforms, exportedAt: new Date().toISOString() };
+    var payload = { items: state.items, platforms: state.platforms, expenses: state.expenses, exportedAt: new Date().toISOString() };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -1108,11 +1366,14 @@
         if (!confirm("現在のデータを、インポートするファイルの内容で置き換えます。よろしいですか？")) return;
         state.items = data.items;
         state.platforms = Array.isArray(data.platforms) && data.platforms.length ? data.platforms : DEFAULT_PLATFORMS.slice();
+        state.expenses = Array.isArray(data.expenses) ? data.expenses : [];
         save();
         savePlatforms();
+        saveExpenses();
         populatePlatformSelects();
         renderItemsView();
         renderDashboard();
+        renderExpensesView();
         renderPlatformList();
         alert("インポートが完了しました。");
       } catch (err) {
@@ -1124,18 +1385,23 @@
   });
 
   document.getElementById("btnClearAll").addEventListener("click", function () {
-    if (!confirm("全ての商品データを削除します。この操作は取り消せません。よろしいですか？")) return;
+    if (!confirm("全ての商品データ・費用データを削除します。この操作は取り消せません。よろしいですか？")) return;
     state.items = [];
+    state.expenses = [];
     save();
+    saveExpenses();
     renderItemsView();
     renderDashboard();
+    renderExpensesView();
   });
 
   // ---------- init ----------
   load();
   populatePlatformSelects();
+  populateExpenseCategorySelect(document.getElementById("ex_type").value, null);
   renderDashboard();
   renderItemsView();
+  renderExpensesView();
   renderPlatformList();
 })();
 </script>
