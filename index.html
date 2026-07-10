@@ -324,10 +324,10 @@
     </div>
 
     <div class="panel">
-      <h2>年次サマリー</h2>
+      <h2>年次サマリー <span class="hint">費用（固定費+変動費）差引後の純利益</span></h2>
       <div class="table-wrap">
         <table id="yearlyTable">
-          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">現金利益</th><th class="num">ポイント込み利益</th></tr></thead>
+          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（ポイント込み）</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -636,7 +636,8 @@
 
   function yen(n) {
     n = Number(n) || 0;
-    return "¥" + n.toLocaleString("ja-JP");
+    var sign = n < 0 ? "-" : "";
+    return sign + "¥" + Math.abs(n).toLocaleString("ja-JP");
   }
 
   function profitOf(item) {
@@ -702,6 +703,10 @@
   }
 
   // ---------- dashboard ----------
+  function expenseSum(list) {
+    return list.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
+  }
+
   function renderDashboard() {
     var soldItems = state.items.filter(function (i) { return i.status === "sold"; });
     var now = new Date();
@@ -711,20 +716,29 @@
     var monthRevenue = monthSold.reduce(function (s, i) { return s + (Number(i.salePrice) || 0); }, 0);
     var monthCashProfit = monthSold.reduce(function (s, i) { return s + profitOf(i); }, 0);
     var monthTotalProfit = monthSold.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
+    var monthExpenses = expenseSum(state.expenses.filter(function (e) { return monthKey(e.date) === curMonthKey; }));
 
     var stockItems = state.items.filter(function (i) { return i.status === "stock" || i.status === "listed"; });
     var stockValue = stockItems.reduce(function (s, i) { return s + (Number(i.purchasePrice) || 0); }, 0);
 
     var totalCashProfit = soldItems.reduce(function (s, i) { return s + profitOf(i); }, 0);
     var totalPointProfit = soldItems.reduce(function (s, i) { return s + totalProfitOf(i); }, 0);
+    var totalExpenses = expenseSum(state.expenses);
+
+    var netMonthCash = monthCashProfit - monthExpenses;
+    var netMonthTotal = monthTotalProfit - monthExpenses;
+    var netTotalCash = totalCashProfit - totalExpenses;
+    var netTotalPoints = totalPointProfit - totalExpenses;
 
     var cards = [
       { label: "今月の売上", value: yen(monthRevenue) },
-      { label: "今月の利益（現金のみ）", value: yen(monthCashProfit), cls: monthCashProfit >= 0 ? "profit" : "loss" },
-      { label: "今月の利益（ポイント込み）", value: yen(monthTotalProfit), cls: monthTotalProfit >= 0 ? "profit" : "loss" },
+      { label: "今月の費用（固定費+変動費）", value: yen(monthExpenses) },
+      { label: "今月の純利益（現金・費用差引後）", value: yen(netMonthCash), cls: netMonthCash >= 0 ? "profit" : "loss" },
+      { label: "今月の純利益（ポイント込み・費用差引後）", value: yen(netMonthTotal), cls: netMonthTotal >= 0 ? "profit" : "loss" },
       { label: "在庫件数 / 在庫仕入額", value: stockItems.length + "件 / " + yen(stockValue) },
-      { label: "累計利益（現金のみ）", value: yen(totalCashProfit), cls: totalCashProfit >= 0 ? "profit" : "loss" },
-      { label: "累計利益（ポイント込み）", value: yen(totalPointProfit), cls: totalPointProfit >= 0 ? "profit" : "loss" }
+      { label: "累計費用（固定費+変動費）", value: yen(totalExpenses) },
+      { label: "累計純利益（現金・費用差引後）", value: yen(netTotalCash), cls: netTotalCash >= 0 ? "profit" : "loss" },
+      { label: "累計純利益（ポイント込み・費用差引後）", value: yen(netTotalPoints), cls: netTotalPoints >= 0 ? "profit" : "loss" }
     ];
 
     document.getElementById("summaryCards").innerHTML = cards.map(function (c) {
@@ -808,10 +822,13 @@
 
   function renderYearlyTable(soldItems) {
     var byYear = {};
+    function ensureYear(y) {
+      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, points: 0, expenses: 0, cashProfit: 0, totalProfit: 0 };
+    }
     soldItems.forEach(function (item) {
       var y = yearKey(item.saleDate);
       if (!y) return;
-      if (!byYear[y]) byYear[y] = { revenue: 0, cost: 0, feeShip: 0, points: 0, cashProfit: 0, totalProfit: 0 };
+      ensureYear(y);
       byYear[y].revenue += Number(item.salePrice) || 0;
       byYear[y].cost += Number(item.purchasePrice) || 0;
       byYear[y].feeShip += (Number(item.fee) || 0) + (Number(item.shipping) || 0);
@@ -819,21 +836,30 @@
       byYear[y].cashProfit += profitOf(item);
       byYear[y].totalProfit += totalProfitOf(item);
     });
+    state.expenses.forEach(function (ex) {
+      var y = yearKey(ex.date);
+      if (!y) return;
+      ensureYear(y);
+      byYear[y].expenses += Number(ex.amount) || 0;
+    });
     var years = Object.keys(byYear).sort().reverse();
     var tbody = document.querySelector("#yearlyTable tbody");
     if (!years.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">データがありません</td></tr>';
       return;
     }
     tbody.innerHTML = years.map(function (y) {
       var r = byYear[y];
+      var netCash = r.cashProfit - r.expenses;
+      var netTotal = r.totalProfit - r.expenses;
       return "<tr><td>" + y + "年</td>" +
         '<td class="num">' + yen(r.revenue) + "</td>" +
         '<td class="num">' + yen(r.cost) + "</td>" +
         '<td class="num">' + yen(r.feeShip) + "</td>" +
         '<td class="num">' + yen(r.points) + "</td>" +
-        '<td class="num ' + (r.cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.cashProfit) + "</td>" +
-        '<td class="num ' + (r.totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(r.totalProfit) + "</td></tr>";
+        '<td class="num">' + yen(r.expenses) + "</td>" +
+        '<td class="num ' + (netCash >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(netCash) + "</td>" +
+        '<td class="num ' + (netTotal >= 0 ? "profit-cell profit" : "profit-cell loss") + '">' + yen(netTotal) + "</td></tr>";
     }).join("");
   }
 
@@ -970,6 +996,7 @@
           state.expenses = state.expenses.filter(function (e) { return e.id !== btn.dataset.id; });
           saveExpenses();
           renderExpensesView();
+          renderDashboard();
         }
       });
     });
@@ -1036,6 +1063,7 @@
     saveExpenses();
     closeExpenseModal();
     renderExpensesView();
+    renderDashboard();
   });
 
   // ---------- item modal ----------
