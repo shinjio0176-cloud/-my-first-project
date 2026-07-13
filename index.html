@@ -431,8 +431,8 @@
     <div class="panel">
       <h2>Excel・スプレッドシートからまとめて登録</h2>
       <p class="note">
-        <strong>すでにExcelやGoogleスプレッドシートで管理表を作っている場合</strong>、1行ずつ入力し直す必要はありません。1行目（見出し行）の項目名を下記の名前に合わせるだけで、列の並び順はそのままで取り込めます。<br>
-        ① 管理表の1行目（見出し）を「対応している列名」に書き換える（すでに近い名前なら不要）<br>
+        <strong>すでにExcelやGoogleスプレッドシートで管理表を作っている場合</strong>、1行ずつ入力し直す必要はありません。見出し行の項目名を下記の名前に合わせるだけで、列の並び順はそのままで取り込めます（見出し行が1行目でなく2〜3行目にあっても、自動で見つけて読み込みます）。<br>
+        ① 管理表の見出し行を「対応している列名」に書き換える（すでに近い名前なら不要）<br>
         ② Excel／スプレッドシートで「ファイル」→「ダウンロード」または「名前を付けて保存」→ 「CSV（カンマ区切り）」形式で保存する<br>
         ③ 「CSVファイルを選択」ボタンから、保存したファイルを選ぶと自動で取り込まれます<br><br>
         <strong>新しく管理表を作る場合</strong>は、「CSVテンプレートをダウンロード」した見本ファイルに直接入力してください。
@@ -1303,13 +1303,25 @@
         return;
       }
 
-      var headerMap = buildHeaderIndexMap(rows[0]);
-      if (headerMap.name === undefined) {
-        alert("1行目（見出し行）に「商品名」の列が見つかりませんでした。1行目に列名（商品名・仕入額・販売額など）を入力してから、もう一度お試しください。");
+      // Header row isn't always row 1 (some templates have title rows above it),
+      // so scan the first several rows for one that looks like a header.
+      var headerMap = null;
+      var headerRowIndex = -1;
+      var maxScanRows = Math.min(rows.length, 10);
+      for (var hi = 0; hi < maxScanRows; hi++) {
+        var candidateMap = buildHeaderIndexMap(rows[hi]);
+        if (candidateMap.name !== undefined) {
+          headerMap = candidateMap;
+          headerRowIndex = hi;
+          break;
+        }
+      }
+      if (!headerMap) {
+        alert("見出し行に「商品名」の列が見つかりませんでした（先頭" + maxScanRows + "行を確認しました）。見出し行に列名（商品名・仕入額・販売額など）を入力してから、もう一度お試しください。");
         e.target.value = "";
         return;
       }
-      var dataRows = rows.slice(1);
+      var dataRows = rows.slice(headerRowIndex + 1);
 
       function field(r, key) {
         var idx = headerMap[key];
