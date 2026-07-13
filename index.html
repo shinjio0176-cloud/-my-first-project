@@ -429,13 +429,13 @@
   <!-- Data management -->
   <section class="view" id="view-data">
     <div class="panel">
-      <h2>Excelからまとめて登録</h2>
+      <h2>Excel・スプレッドシートからまとめて登録</h2>
       <p class="note">
-        今まで使っていたExcelの商品データを、まとめてこのアプリに取り込めます。手順は次の通りです。<br>
-        ① 下の「CSVテンプレートをダウンロード」を押して、見本ファイルを保存する<br>
-        ② そのファイルをExcelで開き、見本の行を参考にして自分のデータを入力する（1行が商品1件）<br>
-        ③ Excelで「名前を付けて保存」→ ファイルの種類を「CSV UTF-8（コンマ区切り）」にして保存する<br>
-        ④ 「CSVファイルを選択」ボタンから、保存したファイルを選ぶと自動で取り込まれます
+        <strong>すでにExcelやGoogleスプレッドシートで管理表を作っている場合</strong>、1行ずつ入力し直す必要はありません。1行目（見出し行）の項目名を下記の名前に合わせるだけで、列の並び順はそのままで取り込めます。<br>
+        ① 管理表の1行目（見出し）を「対応している列名」に書き換える（すでに近い名前なら不要）<br>
+        ② Excel／スプレッドシートで「ファイル」→「ダウンロード」または「名前を付けて保存」→ 「CSV（カンマ区切り）」形式で保存する<br>
+        ③ 「CSVファイルを選択」ボタンから、保存したファイルを選ぶと自動で取り込まれます<br><br>
+        <strong>新しく管理表を作る場合</strong>は、「CSVテンプレートをダウンロード」した見本ファイルに直接入力してください。
       </p>
       <footer class="data-actions">
         <button class="btn secondary" id="btnDownloadTemplate">CSVテンプレートをダウンロード</button>
@@ -443,8 +443,9 @@
         <input type="file" id="fileImportCsv" accept=".csv,text/csv" style="display:none;">
       </footer>
       <p class="note" style="margin-top:10px;">
-        列の意味: 商品名 / 仕入先 / プラットフォーム / ステータス（在庫・出品中・売却済みのいずれか） / 仕入日（例: 2026-07-01） / 仕入額 / 販売日 / 販売額 / 手数料 / 送料 / 獲得ポイント（楽天ポイント・PayPayポイント等を円換算） / メモ。
-        「商品名」以外は空欄でも構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
+        対応している列名（1行目に1つずつ、順不同でOK）:<br>
+        商品名（品名／商品／タイトルでも可） / 仕入先（仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・出品中・売却済みのいずれかを入力） / 仕入日 / 仕入額（原価でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 手数料 / 送料 / 獲得ポイント（ポイントでも可） / メモ（詳細／備考でも可）。<br>
+        「商品名」列以外は無くても構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
       </p>
     </div>
     <div class="panel">
@@ -1255,6 +1256,36 @@
     return isNaN(n) ? 0 : n;
   }
 
+  // Recognized header names per field, so existing spreadsheets can be exported as-is
+  // (column order doesn't matter, and slightly different wording is tolerated)
+  var HEADER_ALIASES = {
+    name: ["商品名", "品名", "商品", "タイトル", "商品名称"],
+    supplier: ["仕入先", "仕入れ先", "購入先", "店舗", "仕入店舗"],
+    platform: ["プラットフォーム", "販売先", "販売プラットフォーム", "出品先", "販売サイト"],
+    status: ["ステータス", "状態", "状況"],
+    purchaseDate: ["仕入日", "仕入れ日", "購入日"],
+    purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
+    saleDate: ["販売日", "売却日", "出荷日"],
+    salePrice: ["販売額", "売却額", "売価", "販売価格"],
+    fee: ["手数料", "販売手数料", "Amazon手数料"],
+    shipping: ["送料", "発送料", "配送料"],
+    points: ["獲得ポイント", "ポイント", "楽天ポイント"],
+    memo: ["メモ", "詳細", "備考", "詳細/MEMO", "詳細 / MEMO", "メモ/詳細"]
+  };
+
+  function buildHeaderIndexMap(headerRow) {
+    var map = {};
+    headerRow.forEach(function (h, idx) {
+      var norm = (h || "").trim();
+      if (!norm) return;
+      Object.keys(HEADER_ALIASES).forEach(function (key) {
+        if (map[key] !== undefined) return; // first matching column wins
+        if (HEADER_ALIASES[key].indexOf(norm) !== -1) map[key] = idx;
+      });
+    });
+    return map;
+  }
+
   document.getElementById("btnImportCsvTrigger").addEventListener("click", function () {
     document.getElementById("fileImportCsv").click();
   });
@@ -1271,27 +1302,38 @@
         e.target.value = "";
         return;
       }
-      // Skip header row if it looks like our template header
-      var first = rows[0];
-      if (first[0] === "商品名") rows = rows.slice(1);
+
+      var headerMap = buildHeaderIndexMap(rows[0]);
+      if (headerMap.name === undefined) {
+        alert("1行目（見出し行）に「商品名」の列が見つかりませんでした。1行目に列名（商品名・仕入額・販売額など）を入力してから、もう一度お試しください。");
+        e.target.value = "";
+        return;
+      }
+      var dataRows = rows.slice(1);
+
+      function field(r, key) {
+        var idx = headerMap[key];
+        return idx === undefined ? "" : (r[idx] || "");
+      }
 
       var imported = 0, skipped = 0;
       var newPlatforms = [];
 
-      rows.forEach(function (r) {
-        var name = (r[0] || "").trim();
+      dataRows.forEach(function (r) {
+        var name = field(r, "name").trim();
         if (!name) { skipped++; return; }
-        var supplier = (r[1] || "").trim();
-        var platform = (r[2] || "").trim() || state.platforms[0];
-        var statusLabel = (r[3] || "").trim();
-        var purchaseDate = parseFlexibleDate(r[4]) || "";
-        var purchasePrice = parseNumberLoose(r[5]);
-        var saleDate = parseFlexibleDate(r[6]);
-        var salePrice = r[7] !== undefined && String(r[7]).trim() !== "" ? parseNumberLoose(r[7]) : null;
-        var fee = parseNumberLoose(r[8]);
-        var shipping = parseNumberLoose(r[9]);
-        var points = parseNumberLoose(r[10]);
-        var memo = (r[11] || "").trim();
+        var supplier = field(r, "supplier").trim();
+        var platform = field(r, "platform").trim() || state.platforms[0];
+        var statusLabel = field(r, "status").trim();
+        var purchaseDate = parseFlexibleDate(field(r, "purchaseDate")) || "";
+        var purchasePrice = parseNumberLoose(field(r, "purchasePrice"));
+        var saleDate = parseFlexibleDate(field(r, "saleDate"));
+        var salePriceRaw = field(r, "salePrice").trim();
+        var salePrice = salePriceRaw !== "" ? parseNumberLoose(salePriceRaw) : null;
+        var fee = parseNumberLoose(field(r, "fee"));
+        var shipping = parseNumberLoose(field(r, "shipping"));
+        var points = parseNumberLoose(field(r, "points"));
+        var memo = field(r, "memo").trim();
 
         var status = STATUS_FROM_LABEL[statusLabel];
         if (!status) status = salePrice != null ? "sold" : "stock";
