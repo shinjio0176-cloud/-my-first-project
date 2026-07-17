@@ -382,6 +382,20 @@
   <section class="view" id="view-expenses">
     <div class="cards" id="expenseSummaryCards"></div>
 
+    <div class="panel">
+      <h2>Excel・スプレッドシートからまとめて登録</h2>
+      <p class="note">
+        すでにExcelやGoogleスプレッドシートで費用（経費）を記録している場合、1件ずつ入力し直す必要はありません。見出し行の項目名を下記に合わせてCSV保存すれば、列の並び順や見出し行の位置（1行目でなくてもOK）に関係なく取り込めます。<br>
+        対応している列名: 利用日 / 種別（「固定費」「変動費」と入力。無くても費用項目から自動判定します） / 費用項目（Amazon大口手数料・Keepa・その他ツール・梱包費・納品送料・その他費用など） / 詳細/MEMO（メモ・備考でも可） / 金額。<br>
+        費用項目が上記のいずれとも一致しない場合は「その他ツール」または「その他費用」として取り込み、元の項目名はメモに残します。
+      </p>
+      <footer class="data-actions">
+        <button class="btn secondary" id="btnDownloadExpenseTemplate">CSVテンプレートをダウンロード</button>
+        <button class="btn" id="btnImportExpenseCsvTrigger">CSVファイルを選択</button>
+        <input type="file" id="fileImportExpenseCsv" accept=".csv,text/csv" style="display:none;">
+      </footer>
+    </div>
+
     <div class="toolbar">
       <div class="spacer"></div>
       <button class="btn" id="btnNewExpense">＋ 費用を登録</button>
@@ -1273,17 +1287,30 @@
     memo: ["メモ", "詳細", "備考", "詳細/MEMO", "詳細 / MEMO", "メモ/詳細"]
   };
 
-  function buildHeaderIndexMap(headerRow) {
+  function buildHeaderIndexMap(headerRow, aliases) {
     var map = {};
     headerRow.forEach(function (h, idx) {
       var norm = (h || "").trim();
       if (!norm) return;
-      Object.keys(HEADER_ALIASES).forEach(function (key) {
+      Object.keys(aliases).forEach(function (key) {
         if (map[key] !== undefined) return; // first matching column wins
-        if (HEADER_ALIASES[key].indexOf(norm) !== -1) map[key] = idx;
+        if (aliases[key].indexOf(norm) !== -1) map[key] = idx;
       });
     });
     return map;
+  }
+
+  // Header row isn't always row 1 (some templates have title/group rows above it),
+  // so scan the first several rows for one that looks like a header.
+  function findHeaderRow(rows, aliases, requiredKey, maxScanRows) {
+    maxScanRows = Math.min(rows.length, maxScanRows || 10);
+    for (var hi = 0; hi < maxScanRows; hi++) {
+      var candidateMap = buildHeaderIndexMap(rows[hi], aliases);
+      if (candidateMap[requiredKey] !== undefined) {
+        return { map: candidateMap, index: hi };
+      }
+    }
+    return null;
   }
 
   document.getElementById("btnImportCsvTrigger").addEventListener("click", function () {
@@ -1303,25 +1330,14 @@
         return;
       }
 
-      // Header row isn't always row 1 (some templates have title rows above it),
-      // so scan the first several rows for one that looks like a header.
-      var headerMap = null;
-      var headerRowIndex = -1;
-      var maxScanRows = Math.min(rows.length, 10);
-      for (var hi = 0; hi < maxScanRows; hi++) {
-        var candidateMap = buildHeaderIndexMap(rows[hi]);
-        if (candidateMap.name !== undefined) {
-          headerMap = candidateMap;
-          headerRowIndex = hi;
-          break;
-        }
-      }
-      if (!headerMap) {
-        alert("見出し行に「商品名」の列が見つかりませんでした（先頭" + maxScanRows + "行を確認しました）。見出し行に列名（商品名・仕入額・販売額など）を入力してから、もう一度お試しください。");
+      var found = findHeaderRow(rows, HEADER_ALIASES, "name", 10);
+      if (!found) {
+        alert("見出し行に「商品名」の列が見つかりませんでした（先頭10行を確認しました）。見出し行に列名（商品名・仕入額・販売額など）を入力してから、もう一度お試しください。");
         e.target.value = "";
         return;
       }
-      var dataRows = rows.slice(headerRowIndex + 1);
+      var headerMap = found.map;
+      var dataRows = rows.slice(found.index + 1);
 
       function field(r, key) {
         var idx = headerMap[key];
@@ -1385,6 +1401,126 @@
 
       var msg = imported + "件のデータを取り込みました。";
       if (skipped) msg += "（商品名が空欄の行" + skipped + "件はスキップしました）";
+      alert(msg);
+      e.target.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+  });
+
+  // ---------- expense CSV template / import ----------
+  var EXPENSE_CSV_HEADERS = ["利用日", "種別", "費用項目", "詳細/MEMO", "金額"];
+  var EXPENSE_HEADER_ALIASES = {
+    date: ["利用日", "日付", "支払日", "購入日", "使用日"],
+    type: ["種別", "タイプ", "費用種別", "固定/変動"],
+    category: ["費用項目", "項目", "科目", "内容", "費目"],
+    memo: ["詳細/MEMO", "詳細 / MEMO", "メモ", "詳細", "備考", "メモ/詳細"],
+    amount: ["金額", "金額(円)", "金額（円）", "費用", "支出額"]
+  };
+
+  function buildTemplateExpenseCsv() {
+    var exampleRows = [
+      ["2026-06-01", "固定費", "Keepa", "月額サブスク", "1980"],
+      ["2026-06-05", "変動費", "梱包費", "ダンボール・緩衝材", "3000"]
+    ];
+    var rows = [EXPENSE_CSV_HEADERS].concat(exampleRows);
+    return rows.map(function (r) { return r.map(csvEscape).join(","); }).join("\r\n");
+  }
+
+  document.getElementById("btnDownloadExpenseTemplate").addEventListener("click", function () {
+    var csv = "﻿" + buildTemplateExpenseCsv();
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "sedori-expense-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  function inferExpenseType(rawType, rawCategory) {
+    var t = (rawType || "").trim();
+    if (/^(固定費?|fixed)$/i.test(t)) return "fixed";
+    if (/^(変動費?|variable)$/i.test(t)) return "variable";
+    var cat = (rawCategory || "").trim();
+    if (EXPENSE_CATEGORIES.fixed.indexOf(cat) !== -1) return "fixed";
+    if (EXPENSE_CATEGORIES.variable.indexOf(cat) !== -1) return "variable";
+    return "variable";
+  }
+
+  function normalizeExpenseCategory(type, rawCategory) {
+    var trimmed = (rawCategory || "").trim();
+    var categories = EXPENSE_CATEGORIES[type];
+    if (trimmed && categories.indexOf(trimmed) !== -1) return { category: trimmed, matched: true };
+    return { category: type === "fixed" ? "その他ツール" : "その他費用", matched: false };
+  }
+
+  document.getElementById("btnImportExpenseCsvTrigger").addEventListener("click", function () {
+    document.getElementById("fileImportExpenseCsv").click();
+  });
+
+  document.getElementById("fileImportExpenseCsv").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var text = reader.result.replace(/^﻿/, "");
+      var rows = parseCsv(text);
+      if (!rows.length) {
+        alert("CSVファイルにデータが見つかりませんでした。");
+        e.target.value = "";
+        return;
+      }
+
+      var found = findHeaderRow(rows, EXPENSE_HEADER_ALIASES, "amount", 10);
+      if (!found) {
+        alert("見出し行に「金額」の列が見つかりませんでした（先頭10行を確認しました）。見出し行に列名（利用日・費用項目・金額など）を入力してから、もう一度お試しください。");
+        e.target.value = "";
+        return;
+      }
+      var headerMap = found.map;
+      var dataRows = rows.slice(found.index + 1);
+
+      function field(r, key) {
+        var idx = headerMap[key];
+        return idx === undefined ? "" : (r[idx] || "");
+      }
+
+      var imported = 0, skipped = 0;
+
+      dataRows.forEach(function (r) {
+        var dateRaw = field(r, "date");
+        var amountRaw = field(r, "amount");
+        if (!dateRaw.trim() && !amountRaw.trim()) { skipped++; return; }
+
+        var date = parseFlexibleDate(dateRaw) || "";
+        var rawCategory = field(r, "category").trim();
+        var type = inferExpenseType(field(r, "type"), rawCategory);
+        var normalized = normalizeExpenseCategory(type, rawCategory);
+        var memo = field(r, "memo").trim();
+        if (!normalized.matched && rawCategory) {
+          memo = ("元の項目: " + rawCategory + (memo ? " / " + memo : ""));
+        }
+        var amount = parseNumberLoose(amountRaw);
+
+        state.expenses.push({
+          id: uid(),
+          type: type,
+          category: normalized.category,
+          date: date,
+          amount: amount,
+          memo: memo
+        });
+        imported++;
+      });
+
+      saveExpenses();
+      renderExpensesView();
+      renderDashboard();
+
+      var msg = imported + "件の費用データを取り込みました。";
+      if (skipped) msg += "（利用日・金額がどちらも空欄の行" + skipped + "件はスキップしました）";
       alert(msg);
       e.target.value = "";
     };
