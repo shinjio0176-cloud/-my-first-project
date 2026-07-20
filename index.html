@@ -348,6 +348,7 @@
       </select>
       <input type="text" id="filterSearch" placeholder="商品名・仕入先で検索">
       <div class="spacer"></div>
+      <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
       <button class="btn" id="btnNewItem2">＋ 新規登録</button>
     </div>
     <div class="panel" style="padding:0;">
@@ -355,6 +356,7 @@
         <table id="itemsTable">
           <thead>
             <tr>
+              <th><input type="checkbox" id="itemsSelectAll"></th>
               <th>商品名</th>
               <th>仕入先</th>
               <th>プラットフォーム</th>
@@ -398,6 +400,7 @@
 
     <div class="toolbar">
       <div class="spacer"></div>
+      <button class="btn danger" id="btnDeleteSelectedExpenses" disabled>選択した費用を削除</button>
       <button class="btn" id="btnNewExpense">＋ 費用を登録</button>
     </div>
 
@@ -407,6 +410,7 @@
         <table id="fixedExpenseTable">
           <thead>
             <tr>
+              <th><input type="checkbox" class="expense-select-all"></th>
               <th>利用日</th>
               <th>費用項目</th>
               <th>詳細 / MEMO</th>
@@ -426,6 +430,7 @@
         <table id="variableExpenseTable">
           <thead>
             <tr>
+              <th><input type="checkbox" class="expense-select-all"></th>
               <th>利用日</th>
               <th>費用項目</th>
               <th>詳細 / MEMO</th>
@@ -902,10 +907,12 @@
 
     var tbody = document.querySelector("#itemsTable tbody");
     var emptyState = document.getElementById("itemsEmpty");
+    document.getElementById("itemsSelectAll").checked = false;
 
     if (!filtered.length) {
       tbody.innerHTML = "";
       emptyState.style.display = "block";
+      updateItemsBulkDeleteButton();
       return;
     }
     emptyState.style.display = "none";
@@ -918,6 +925,7 @@
       var totalCell = totalProfit === null ? "—" : yen(totalProfit);
       var totalCls = totalProfit === null ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
       return "<tr>" +
+        '<td><input type="checkbox" class="item-row-select" data-id="' + item.id + '"></td>' +
         "<td>" + escapeHtml(item.name) + "</td>" +
         "<td>" + escapeHtml(item.supplier || "—") + "</td>" +
         "<td>" + escapeHtml(item.platform || "—") + "</td>" +
@@ -947,7 +955,36 @@
         }
       });
     });
+    tbody.querySelectorAll(".item-row-select").forEach(function (cb) {
+      cb.addEventListener("change", updateItemsBulkDeleteButton);
+    });
+    updateItemsBulkDeleteButton();
   }
+
+  function updateItemsBulkDeleteButton() {
+    var checked = document.querySelectorAll("#itemsTable tbody .item-row-select:checked");
+    var btn = document.getElementById("btnDeleteSelectedItems");
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length ? "選択した商品を削除（" + checked.length + "件）" : "選択した商品を削除";
+  }
+
+  document.getElementById("itemsSelectAll").addEventListener("change", function () {
+    var checked = this.checked;
+    document.querySelectorAll("#itemsTable tbody .item-row-select").forEach(function (cb) {
+      cb.checked = checked;
+    });
+    updateItemsBulkDeleteButton();
+  });
+
+  document.getElementById("btnDeleteSelectedItems").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#itemsTable tbody .item-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    if (!ids.length) return;
+    if (!confirm(ids.length + "件の商品データを削除します。よろしいですか？")) return;
+    state.items = state.items.filter(function (i) { return ids.indexOf(i.id) === -1; });
+    save();
+    renderItemsView();
+    renderDashboard();
+  });
 
   document.getElementById("filterStatus").addEventListener("change", renderItemsView);
   document.getElementById("filterPlatform").addEventListener("change", renderItemsView);
@@ -984,16 +1021,20 @@
     var sorted = list.slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
     var tbody = document.querySelector("#" + tableId + " tbody");
     var emptyState = document.getElementById(emptyId);
+    var selectAll = document.querySelector("#" + tableId + " .expense-select-all");
+    if (selectAll) selectAll.checked = false;
 
     if (!sorted.length) {
       tbody.innerHTML = "";
       emptyState.style.display = "block";
+      updateExpensesBulkDeleteButton();
       return;
     }
     emptyState.style.display = "none";
 
     tbody.innerHTML = sorted.map(function (ex) {
       return "<tr>" +
+        '<td><input type="checkbox" class="expense-row-select" data-id="' + ex.id + '"></td>' +
         "<td>" + (ex.date || "—") + "</td>" +
         "<td>" + escapeHtml(ex.category) + "</td>" +
         "<td>" + escapeHtml(ex.memo || "—") + "</td>" +
@@ -1015,7 +1056,38 @@
         }
       });
     });
+    tbody.querySelectorAll(".expense-row-select").forEach(function (cb) {
+      cb.addEventListener("change", updateExpensesBulkDeleteButton);
+    });
+    updateExpensesBulkDeleteButton();
   }
+
+  function updateExpensesBulkDeleteButton() {
+    var checked = document.querySelectorAll("#view-expenses .expense-row-select:checked");
+    var btn = document.getElementById("btnDeleteSelectedExpenses");
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length ? "選択した費用を削除（" + checked.length + "件）" : "選択した費用を削除";
+  }
+
+  document.querySelectorAll(".expense-select-all").forEach(function (selectAllCb) {
+    selectAllCb.addEventListener("change", function () {
+      var table = this.closest("table");
+      table.querySelectorAll(".expense-row-select").forEach(function (cb) {
+        cb.checked = selectAllCb.checked;
+      });
+      updateExpensesBulkDeleteButton();
+    });
+  });
+
+  document.getElementById("btnDeleteSelectedExpenses").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#view-expenses .expense-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    if (!ids.length) return;
+    if (!confirm(ids.length + "件の費用データを削除します。よろしいですか？")) return;
+    state.expenses = state.expenses.filter(function (e) { return ids.indexOf(e.id) === -1; });
+    saveExpenses();
+    renderExpensesView();
+    renderDashboard();
+  });
 
   // ---------- expense modal ----------
   var expenseBackdrop = document.getElementById("expenseModalBackdrop");
