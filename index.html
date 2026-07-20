@@ -389,8 +389,16 @@
       <p class="note">
         すでにExcelやGoogleスプレッドシートで費用（経費）を記録している場合、1件ずつ入力し直す必要はありません。見出し行の項目名を下記に合わせてCSV保存すれば、列の並び順や見出し行の位置（1行目でなくてもOK）に関係なく取り込めます。<br>
         対応している列名: 利用日 / 種別（「固定費」「変動費」と入力。無くても費用項目から自動判定します） / 費用項目（Amazon大口手数料・Keepa・その他ツール・梱包費・納品送料・その他費用など） / 詳細/MEMO（メモ・備考でも可） / 金額。<br>
-        費用項目が上記のいずれとも一致しない場合は「その他ツール」または「その他費用」として取り込み、元の項目名はメモに残します。
+        費用項目が上記のいずれとも一致しない場合は「その他ツール」または「その他費用」として取り込み、元の項目名はメモに残します。<br><br>
+        <strong>1つのシートに「固定費」ブロックと「変動費」ブロックが横に並んでいる場合</strong>は、自動判定がうまくいきません。片方のブロックだけを新しいシートにコピーしてCSV保存し、下の「取り込む種別」でそのブロックの種別を指定してから取り込んでください（もう片方のブロックも同様に、もう一度取り込みます）。
       </p>
+      <div class="toolbar" style="margin-bottom:0;">
+        <select id="ex_import_type_override">
+          <option value="auto">取り込む種別: 自動判定</option>
+          <option value="fixed">取り込む種別: すべて固定費として登録</option>
+          <option value="variable">取り込む種別: すべて変動費として登録</option>
+        </select>
+      </div>
       <footer class="data-actions">
         <button class="btn secondary" id="btnDownloadExpenseTemplate">CSVテンプレートをダウンロード</button>
         <button class="btn" id="btnImportExpenseCsvTrigger">CSVファイルを選択</button>
@@ -1560,6 +1568,7 @@
       }
 
       var imported = 0, skipped = 0;
+      var typeOverride = document.getElementById("ex_import_type_override").value;
 
       dataRows.forEach(function (r) {
         var dateRaw = field(r, "date");
@@ -1568,7 +1577,9 @@
 
         var date = parseFlexibleDate(dateRaw) || "";
         var rawCategory = field(r, "category").trim();
-        var type = inferExpenseType(field(r, "type"), rawCategory);
+        var type = (typeOverride === "fixed" || typeOverride === "variable")
+          ? typeOverride
+          : inferExpenseType(field(r, "type"), rawCategory);
         var normalized = normalizeExpenseCategory(type, rawCategory);
         var memo = field(r, "memo").trim();
         if (!normalized.matched && rawCategory) {
