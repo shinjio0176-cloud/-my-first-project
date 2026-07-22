@@ -310,7 +310,7 @@
     <div class="cards" id="summaryCards"></div>
 
     <div class="panel">
-      <h2>月次売上・現金利益 <span class="hint">直近12ヶ月／ポイントを含まない金額</span></h2>
+      <h2>月次売上・現金利益 <span class="hint">直近12ヶ月／P払い額を含まない金額</span></h2>
       <div class="bar-chart" id="monthlyChart"></div>
       <div class="legend">
         <span><i style="background:var(--accent-soft)"></i>売上</span>
@@ -327,7 +327,7 @@
       <h2>年次サマリー <span class="hint">費用（固定費+変動費）差引後の純利益</span></h2>
       <div class="table-wrap">
         <table id="yearlyTable">
-          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">ポイント</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（ポイント込み）</th></tr></thead>
+          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">想定手数料+送料</th><th class="num">P払い額</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（現金+P還元）</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -340,7 +340,7 @@
       <select id="filterStatus">
         <option value="">全ステータス</option>
         <option value="stock">在庫</option>
-        <option value="listed">出品中</option>
+        <option value="listed">販売中</option>
         <option value="sold">売却済み</option>
       </select>
       <select id="filterPlatform">
@@ -363,11 +363,11 @@
               <th>ステータス</th>
               <th class="num">仕入額</th>
               <th class="num">販売額</th>
-              <th class="num">手数料</th>
+              <th class="num">想定手数料</th>
               <th class="num">送料</th>
-              <th class="num">ポイント</th>
+              <th class="num">P払い額</th>
               <th class="num">現金利益</th>
-              <th class="num">ポイント込み利益</th>
+              <th class="num">現金+P還元利益</th>
               <th>仕入日</th>
               <th>販売日</th>
               <th></th>
@@ -471,7 +471,7 @@
       </footer>
       <p class="note" style="margin-top:10px;">
         対応している列名（1行目に1つずつ、順不同でOK）:<br>
-        商品名（品名／商品／タイトルでも可） / 仕入先（仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・出品中・売却済みのいずれかを入力） / 仕入日 / 仕入額（原価でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 手数料 / 送料 / 獲得ポイント（ポイントでも可） / メモ（詳細／備考でも可）。<br>
+        商品名（品名／商品／タイトルでも可） / 仕入先（仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 仕入日 / 仕入額（原価でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 想定手数料（手数料でも可） / 送料 / P払い額（Pt払い額／獲得ポイント／ポイントでも可） / メモ（詳細／備考でも可）。<br>
         「商品名」列以外は無くても構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
       </p>
     </div>
@@ -519,7 +519,7 @@
         <label>ステータス</label>
         <select id="f_status">
           <option value="stock">在庫</option>
-          <option value="listed">出品中</option>
+          <option value="listed">販売中</option>
           <option value="sold">売却済み</option>
         </select>
       </div>
@@ -540,7 +540,7 @@
         <input type="number" id="f_salePrice" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
-        <label>手数料（円）</label>
+        <label>想定手数料（円）</label>
         <input type="number" id="f_fee" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
@@ -548,7 +548,7 @@
         <input type="number" id="f_shipping" min="0" step="1" placeholder="0">
       </div>
       <div class="field full">
-        <label>獲得ポイント（円換算・楽天ポイント/PayPayポイント等）</label>
+        <label>P払い額（円換算）</label>
         <input type="number" id="f_points" min="0" step="1" placeholder="0">
       </div>
       <div class="field full">
@@ -607,7 +607,7 @@
   var PLATFORM_KEY = "sedori_platforms_v1";
   var EXPENSE_STORAGE_KEY = "sedori_expenses_v1";
   var DEFAULT_PLATFORMS = ["メルカリ", "Amazon", "ヤフオク", "楽天", "その他"];
-  var STATUS_LABEL = { stock: "在庫", listed: "出品中", sold: "売却済み" };
+  var STATUS_LABEL = { stock: "在庫", listed: "販売中", sold: "売却済み" };
   var EXPENSE_TYPE_LABEL = { fixed: "固定費", variable: "変動費" };
   var EXPENSE_CATEGORIES = {
     fixed: ["Amazon大口手数料", "Keepa", "その他ツール"],
@@ -762,11 +762,11 @@
       { label: "今月の売上", value: yen(monthRevenue) },
       { label: "今月の費用（固定費+変動費）", value: yen(monthExpenses) },
       { label: "今月の純利益（現金・費用差引後）", value: yen(netMonthCash), cls: netMonthCash >= 0 ? "profit" : "loss" },
-      { label: "今月の純利益（ポイント込み・費用差引後）", value: yen(netMonthTotal), cls: netMonthTotal >= 0 ? "profit" : "loss" },
+      { label: "今月の純利益（現金+P還元・費用差引後）", value: yen(netMonthTotal), cls: netMonthTotal >= 0 ? "profit" : "loss" },
       { label: "在庫件数 / 在庫仕入額", value: stockItems.length + "件 / " + yen(stockValue) },
       { label: "累計費用（固定費+変動費）", value: yen(totalExpenses) },
       { label: "累計純利益（現金・費用差引後）", value: yen(netTotalCash), cls: netTotalCash >= 0 ? "profit" : "loss" },
-      { label: "累計純利益（ポイント込み・費用差引後）", value: yen(netTotalPoints), cls: netTotalPoints >= 0 ? "profit" : "loss" }
+      { label: "累計純利益（現金+P還元・費用差引後）", value: yen(netTotalPoints), cls: netTotalPoints >= 0 ? "profit" : "loss" }
     ];
 
     document.getElementById("summaryCards").innerHTML = cards.map(function (c) {
@@ -1269,8 +1269,8 @@
   });
 
   // ---------- CSV template / import ----------
-  var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "手数料", "送料", "獲得ポイント", "メモ"];
-  var STATUS_FROM_LABEL = { "在庫": "stock", "出品中": "listed", "売却済み": "sold" };
+  var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "想定手数料", "送料", "P払い額", "メモ"];
+  var STATUS_FROM_LABEL = { "在庫": "stock", "販売中": "listed", "出品中": "listed", "売却済み": "sold" };
 
   function csvEscape(v) {
     v = v == null ? "" : String(v);
@@ -1281,7 +1281,7 @@
   function buildTemplateCsv() {
     var exampleRows = [
       ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "2026-06-01", "15000", "2026-06-10", "22000", "2200", "700", "0", "動作確認済み"],
-      ["未使用ゲームソフト", "ブックオフ〇〇店", "楽天市場", "売却済み", "2026-06-20", "800", "2026-06-25", "1800", "100", "0", "18", "楽天ポイント18pt獲得"],
+      ["未使用ゲームソフト", "ブックオフ〇〇店", "楽天市場", "売却済み", "2026-06-20", "800", "2026-06-25", "1800", "100", "0", "18", "楽天ポイント18pt支払いに使用"],
       ["未使用ゲームソフト2", "ブックオフ〇〇店", "Amazon", "在庫", "2026-07-01", "800", "", "", "", "", "", ""]
     ];
     var rows = [CSV_HEADERS].concat(exampleRows);
@@ -1361,9 +1361,9 @@
     purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
     saleDate: ["販売日", "売却日", "出荷日", "売上日"],
     salePrice: ["販売額", "売却額", "売価", "販売価格"],
-    fee: ["手数料", "販売手数料", "Amazon手数料"],
+    fee: ["想定手数料", "手数料", "販売手数料", "Amazon手数料"],
     shipping: ["送料", "発送料", "配送料"],
-    points: ["獲得ポイント", "ポイント", "楽天ポイント"],
+    points: ["P払い額", "Pt払い額", "獲得ポイント", "ポイント", "楽天ポイント"],
     memo: ["メモ", "詳細", "備考", "詳細/MEMO", "詳細 / MEMO", "メモ/詳細"]
   };
 
