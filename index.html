@@ -669,7 +669,7 @@
   }
 
   function profitOf(item) {
-    if (item.status !== "sold") return null;
+    if (item.status === "stock" || item.salePrice == null) return null;
     var sale = Number(item.salePrice) || 0;
     var cost = Number(item.purchasePrice) || 0;
     var fee = Number(item.fee) || 0;
@@ -942,10 +942,10 @@
         "<td>" + escapeHtml(item.platform || "—") + "</td>" +
         '<td><span class="badge status-' + item.status + '">' + STATUS_LABEL[item.status] + "</span></td>" +
         '<td class="num">' + yen(item.purchasePrice) + "</td>" +
-        '<td class="num">' + (item.status === "sold" ? yen(item.salePrice) : "—") + "</td>" +
-        '<td class="num">' + (item.status === "sold" ? yen(item.fee) : "—") + "</td>" +
-        '<td class="num">' + (item.status === "sold" ? yen(item.shipping) : "—") + "</td>" +
-        '<td class="num">' + (item.status === "sold" ? yen(item.points) : "—") + "</td>" +
+        '<td class="num">' + (item.salePrice != null ? yen(item.salePrice) : "—") + "</td>" +
+        '<td class="num">' + (item.salePrice != null ? yen(item.fee) : "—") + "</td>" +
+        '<td class="num">' + (item.salePrice != null ? yen(item.shipping) : "—") + "</td>" +
+        '<td class="num">' + (item.salePrice != null ? yen(item.points) : "—") + "</td>" +
         '<td class="num ' + cashCls + '">' + cashCell + "</td>" +
         '<td class="num ' + totalCls + '">' + totalCell + "</td>" +
         "<td>" + (item.purchaseDate || "—") + "</td>" +
