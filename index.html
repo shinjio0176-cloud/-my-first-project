@@ -367,7 +367,9 @@
               <th class="num">送料</th>
               <th class="num">P払い額</th>
               <th class="num">現金利益</th>
+              <th class="num">現金利益率</th>
               <th class="num">現金+P還元利益</th>
+              <th class="num">現金+P還元利益率</th>
               <th>仕入日</th>
               <th>販売日</th>
               <th></th>
@@ -683,6 +685,12 @@
     return cash + (Number(item.points) || 0);
   }
 
+  function formatMargin(profit, salePrice) {
+    var sale = Number(salePrice) || 0;
+    if (profit === null || !sale) return "—";
+    return (Math.round((profit / sale) * 1000) / 10) + "%";
+  }
+
   function monthKey(dateStr) {
     if (!dateStr) return null;
     return dateStr.slice(0, 7); // YYYY-MM
@@ -936,6 +944,8 @@
       var cashCls = (cashProfit === null || !isRealized) ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
       var totalCell = totalProfit === null ? "—" : yen(totalProfit);
       var totalCls = (totalProfit === null || !isRealized) ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+      var cashMarginCell = formatMargin(cashProfit, item.salePrice);
+      var totalMarginCell = formatMargin(totalProfit, item.salePrice);
       return "<tr>" +
         '<td><input type="checkbox" class="item-row-select" data-id="' + item.id + '"></td>' +
         "<td>" + escapeHtml(item.name) + "</td>" +
@@ -948,7 +958,9 @@
         '<td class="num">' + (item.salePrice != null ? yen(item.shipping) : "—") + "</td>" +
         '<td class="num">' + (item.salePrice != null ? yen(item.points) : "—") + "</td>" +
         '<td class="num ' + cashCls + '">' + cashCell + "</td>" +
+        '<td class="num ' + cashCls + '">' + cashMarginCell + "</td>" +
         '<td class="num ' + totalCls + '">' + totalCell + "</td>" +
+        '<td class="num ' + totalCls + '">' + totalMarginCell + "</td>" +
         "<td>" + (item.purchaseDate || "—") + "</td>" +
         "<td>" + (item.saleDate || "—") + "</td>" +
         '<td><button class="icon-btn edit" data-id="' + item.id + '">編集</button><button class="icon-btn del" data-id="' + item.id + '">削除</button></td>' +
