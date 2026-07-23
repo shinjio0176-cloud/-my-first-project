@@ -931,10 +931,11 @@
     tbody.innerHTML = filtered.map(function (item) {
       var cashProfit = profitOf(item);
       var totalProfit = totalProfitOf(item);
+      var isRealized = item.status === "sold";
       var cashCell = cashProfit === null ? "—" : yen(cashProfit);
-      var cashCls = cashProfit === null ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+      var cashCls = (cashProfit === null || !isRealized) ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
       var totalCell = totalProfit === null ? "—" : yen(totalProfit);
-      var totalCls = totalProfit === null ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+      var totalCls = (totalProfit === null || !isRealized) ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
       return "<tr>" +
         '<td><input type="checkbox" class="item-row-select" data-id="' + item.id + '"></td>' +
         "<td>" + escapeHtml(item.name) + "</td>" +
