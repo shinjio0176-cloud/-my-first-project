@@ -436,6 +436,11 @@
 
     <div class="panel" style="padding:0;">
       <h2 style="padding:16px 16px 0;">変動費</h2>
+      <div class="toolbar" style="padding:0 16px;">
+        <div class="spacer"></div>
+        <button class="btn danger" id="btnDeleteSelectedVariable" disabled>選択した変動費を削除</button>
+        <button class="btn secondary" id="btnNewExpenseVariable">＋ 変動費を登録</button>
+      </div>
       <div class="table-wrap">
         <table id="variableExpenseTable">
           <thead>
@@ -1091,6 +1096,11 @@
     var btn = document.getElementById("btnDeleteSelectedExpenses");
     btn.disabled = checked.length === 0;
     btn.textContent = checked.length ? "選択した費用を削除（" + checked.length + "件）" : "選択した費用を削除";
+
+    var varChecked = document.querySelectorAll("#variableExpenseTable .expense-row-select:checked");
+    var varBtn = document.getElementById("btnDeleteSelectedVariable");
+    varBtn.disabled = varChecked.length === 0;
+    varBtn.textContent = varChecked.length ? "選択した変動費を削除（" + varChecked.length + "件）" : "選択した変動費を削除";
   }
 
   document.querySelectorAll(".expense-select-all").forEach(function (selectAllCb) {
@@ -1113,6 +1123,16 @@
     renderDashboard();
   });
 
+  document.getElementById("btnDeleteSelectedVariable").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#variableExpenseTable .expense-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    if (!ids.length) return;
+    if (!confirm(ids.length + "件の変動費データを削除します。よろしいですか？")) return;
+    state.expenses = state.expenses.filter(function (e) { return ids.indexOf(e.id) === -1; });
+    saveExpenses();
+    renderExpensesView();
+    renderDashboard();
+  });
+
   // ---------- expense modal ----------
   var expenseBackdrop = document.getElementById("expenseModalBackdrop");
 
@@ -1129,12 +1149,12 @@
     populateExpenseCategorySelect(this.value, null);
   });
 
-  function openExpenseModal(id) {
+  function openExpenseModal(id, presetType) {
     state.editingExpenseId = id || null;
     var ex = id ? state.expenses.find(function (e) { return e.id === id; }) : null;
 
     document.getElementById("expenseModalTitle").textContent = ex ? "費用を編集" : "費用を登録";
-    var type = ex ? ex.type : "variable";
+    var type = ex ? ex.type : (presetType || "variable");
     document.getElementById("ex_type").value = type;
     populateExpenseCategorySelect(type, ex ? ex.category : null);
     document.getElementById("ex_date").value = ex ? ex.date || "" : new Date().toISOString().slice(0, 10);
@@ -1150,6 +1170,7 @@
   }
 
   document.getElementById("btnNewExpense").addEventListener("click", function () { openExpenseModal(null); });
+  document.getElementById("btnNewExpenseVariable").addEventListener("click", function () { openExpenseModal(null, "variable"); });
   document.getElementById("btnExpenseCancel").addEventListener("click", closeExpenseModal);
   expenseBackdrop.addEventListener("click", function (e) { if (e.target === expenseBackdrop) closeExpenseModal(); });
 
