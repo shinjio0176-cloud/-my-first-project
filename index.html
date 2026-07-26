@@ -538,6 +538,10 @@
         <label>仕入額（円）</label>
         <input type="number" id="f_purchasePrice" min="0" step="1" placeholder="0">
       </div>
+      <div class="field" id="f_quantity_wrap">
+        <label>数量（同じ商品をまとめて購入した場合の点数）</label>
+        <input type="number" id="f_quantity" min="1" step="1" value="1">
+      </div>
       <div class="field">
         <label>販売日</label>
         <input type="date" id="f_saleDate">
@@ -1212,6 +1216,8 @@
     document.getElementById("f_status").value = item ? item.status : "stock";
     document.getElementById("f_purchaseDate").value = item ? item.purchaseDate || "" : new Date().toISOString().slice(0, 10);
     document.getElementById("f_purchasePrice").value = item ? item.purchasePrice : "";
+    document.getElementById("f_quantity").value = "1";
+    document.getElementById("f_quantity_wrap").style.display = item ? "none" : "";
     document.getElementById("f_saleDate").value = item ? item.saleDate || "" : "";
     document.getElementById("f_salePrice").value = item && item.salePrice != null ? item.salePrice : "";
     document.getElementById("f_fee").value = item && item.fee != null ? item.fee : "";
@@ -1257,8 +1263,10 @@
       var idx = state.items.findIndex(function (i) { return i.id === state.editingId; });
       if (idx !== -1) state.items[idx] = Object.assign({ id: state.editingId }, payload);
     } else {
-      payload.id = uid();
-      state.items.push(payload);
+      var quantity = Math.max(1, parseInt(document.getElementById("f_quantity").value, 10) || 1);
+      for (var q = 0; q < quantity; q++) {
+        state.items.push(Object.assign({}, payload, { id: uid() }));
+      }
     }
 
     save();
