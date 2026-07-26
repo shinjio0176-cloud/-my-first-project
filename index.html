@@ -363,6 +363,7 @@
               <th>ステータス</th>
               <th class="num">仕入額</th>
               <th class="num">販売額</th>
+              <th class="num">販売数</th>
               <th class="num">想定手数料</th>
               <th class="num">送料</th>
               <th class="num">P払い額</th>
@@ -551,6 +552,10 @@
         <input type="number" id="f_salePrice" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
+        <label>販売数（まとめて1つの取引として売る個数）</label>
+        <input type="number" id="f_saleQuantity" min="1" step="1" value="1">
+      </div>
+      <div class="field">
         <label>想定手数料（円）</label>
         <input type="number" id="f_fee" min="0" step="1" placeholder="0">
       </div>
@@ -679,10 +684,15 @@
     return sign + "¥" + Math.abs(n).toLocaleString("ja-JP");
   }
 
+  function itemCost(item) {
+    var quantity = Number(item.saleQuantity) || 1;
+    return (Number(item.purchasePrice) || 0) * quantity;
+  }
+
   function profitOf(item) {
     if (item.status === "stock" || item.salePrice == null) return null;
     var sale = Number(item.salePrice) || 0;
-    var cost = Number(item.purchasePrice) || 0;
+    var cost = itemCost(item);
     var fee = Number(item.fee) || 0;
     var ship = Number(item.shipping) || 0;
     return sale - cost - fee - ship;
@@ -764,7 +774,7 @@
     var monthExpenses = expenseSum(state.expenses.filter(function (e) { return monthKey(e.date) === curMonthKey; }));
 
     var stockItems = state.items.filter(function (i) { return i.status === "stock" || i.status === "listed"; });
-    var stockValue = stockItems.reduce(function (s, i) { return s + (Number(i.purchasePrice) || 0); }, 0);
+    var stockValue = stockItems.reduce(function (s, i) { return s + itemCost(i); }, 0);
 
     var totalRevenue = soldItems.reduce(function (s, i) { return s + (Number(i.salePrice) || 0); }, 0);
     var totalCashProfit = soldItems.reduce(function (s, i) { return s + profitOf(i); }, 0);
@@ -878,7 +888,7 @@
       if (!y) return;
       ensureYear(y);
       byYear[y].revenue += Number(item.salePrice) || 0;
-      byYear[y].cost += Number(item.purchasePrice) || 0;
+      byYear[y].cost += itemCost(item);
       byYear[y].feeShip += (Number(item.fee) || 0) + (Number(item.shipping) || 0);
       byYear[y].points += Number(item.points) || 0;
       byYear[y].cashProfit += profitOf(item);
@@ -963,6 +973,7 @@
         '<td><span class="badge status-' + item.status + '">' + STATUS_LABEL[item.status] + "</span></td>" +
         '<td class="num">' + yen(item.purchasePrice) + "</td>" +
         '<td class="num">' + (item.salePrice != null ? yen(item.salePrice) : "—") + "</td>" +
+        '<td class="num">' + (item.salePrice != null ? (Number(item.saleQuantity) || 1) : "—") + "</td>" +
         '<td class="num">' + (item.salePrice != null ? yen(item.fee) : "—") + "</td>" +
         '<td class="num">' + (item.salePrice != null ? yen(item.shipping) : "—") + "</td>" +
         '<td class="num">' + (item.salePrice != null ? yen(item.points) : "—") + "</td>" +
@@ -1220,6 +1231,7 @@
     document.getElementById("f_quantity_wrap").style.display = item ? "none" : "";
     document.getElementById("f_saleDate").value = item ? item.saleDate || "" : "";
     document.getElementById("f_salePrice").value = item && item.salePrice != null ? item.salePrice : "";
+    document.getElementById("f_saleQuantity").value = item && item.saleQuantity ? item.saleQuantity : 1;
     document.getElementById("f_fee").value = item && item.fee != null ? item.fee : "";
     document.getElementById("f_shipping").value = item && item.shipping != null ? item.shipping : "";
     document.getElementById("f_points").value = item && item.points != null ? item.points : "";
@@ -1253,6 +1265,7 @@
       purchasePrice: Number(document.getElementById("f_purchasePrice").value) || 0,
       saleDate: document.getElementById("f_saleDate").value || null,
       salePrice: document.getElementById("f_salePrice").value === "" ? null : Number(document.getElementById("f_salePrice").value),
+      saleQuantity: Math.max(1, parseInt(document.getElementById("f_saleQuantity").value, 10) || 1),
       fee: document.getElementById("f_fee").value === "" ? 0 : Number(document.getElementById("f_fee").value),
       shipping: document.getElementById("f_shipping").value === "" ? 0 : Number(document.getElementById("f_shipping").value),
       points: document.getElementById("f_points").value === "" ? 0 : Number(document.getElementById("f_points").value),
@@ -1406,6 +1419,7 @@
     purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
     saleDate: ["販売日", "売却日", "出荷日", "売上日"],
     salePrice: ["販売額", "売却額", "売価", "販売価格"],
+    saleQuantity: ["販売数", "販売個数", "売却数", "数量"],
     fee: ["想定手数料", "手数料", "販売手数料", "Amazon手数料"],
     shipping: ["送料", "発送料", "配送料"],
     points: ["P払い額", "Pt払い額", "獲得ポイント", "ポイント", "楽天ポイント"],
@@ -1483,6 +1497,7 @@
         var saleDate = parseFlexibleDate(field(r, "saleDate"));
         var salePriceRaw = field(r, "salePrice").trim();
         var salePrice = salePriceRaw !== "" ? parseNumberLoose(salePriceRaw) : null;
+        var saleQuantity = Math.max(1, parseInt(field(r, "saleQuantity"), 10) || 1);
         var fee = parseNumberLoose(field(r, "fee"));
         var shipping = parseNumberLoose(field(r, "shipping"));
         var points = parseNumberLoose(field(r, "points"));
@@ -1505,6 +1520,7 @@
           purchasePrice: purchasePrice,
           saleDate: saleDate,
           salePrice: salePrice,
+          saleQuantity: saleQuantity,
           fee: fee,
           shipping: shipping,
           points: points,
