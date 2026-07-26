@@ -1393,13 +1393,19 @@
     return rows.filter(function (r) { return r.some(function (v) { return v !== ""; }); });
   }
 
-  function parseFlexibleDate(v) {
+  function parseFlexibleDate(v, fallbackYear) {
     v = (v || "").trim();
     if (!v) return null;
-    var m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    if (!m) return null;
     var pad = function (n) { return n.length === 1 ? "0" + n : n; };
-    return m[1] + "-" + pad(m[2]) + "-" + pad(m[3]);
+    var m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) return m[1] + "-" + pad(m[2]) + "-" + pad(m[3]);
+    // year-less "M/D" style dates (common when a spreadsheet column is formatted to hide the year)
+    var m2 = v.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if (m2) {
+      var year = fallbackYear || new Date().getFullYear();
+      return year + "-" + pad(m2[1]) + "-" + pad(m2[2]);
+    }
+    return null;
   }
 
   function parseNumberLoose(v) {
@@ -1417,7 +1423,7 @@
     status: ["ステータス", "状態", "状況"],
     purchaseDate: ["仕入日", "仕入れ日", "購入日"],
     purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
-    saleDate: ["販売日", "売却日", "出荷日", "売上日"],
+    saleDate: ["販売日", "売却日", "出荷日", "売上日", "販売開始日", "出品日"],
     salePrice: ["販売額", "売却額", "売価", "販売価格"],
     saleQuantity: ["販売数", "販売個数", "売却数", "数量"],
     fee: ["想定手数料", "手数料", "販売手数料", "Amazon手数料"],
@@ -1493,8 +1499,9 @@
         var platform = field(r, "platform").trim() || state.platforms[0];
         var statusLabel = field(r, "status").trim();
         var purchaseDate = parseFlexibleDate(field(r, "purchaseDate")) || "";
+        var purchaseYear = purchaseDate ? Number(purchaseDate.slice(0, 4)) : null;
         var purchasePrice = parseNumberLoose(field(r, "purchasePrice"));
-        var saleDate = parseFlexibleDate(field(r, "saleDate"));
+        var saleDate = parseFlexibleDate(field(r, "saleDate"), purchaseYear);
         var salePriceRaw = field(r, "salePrice").trim();
         var salePrice = salePriceRaw !== "" ? parseNumberLoose(salePriceRaw) : null;
         var saleQuantity = Math.max(1, parseInt(field(r, "saleQuantity"), 10) || 1);
