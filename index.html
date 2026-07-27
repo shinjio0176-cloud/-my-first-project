@@ -1495,19 +1495,48 @@
 
       var overwrite = document.getElementById("csvImportOverwrite").checked;
 
-      function matchKey(o) {
-        return [o.name, o.supplier, o.purchaseDate, o.purchasePrice].join("");
+      // Trims + collapses any run of whitespace (including full-width spaces) so that
+      // small formatting differences between spreadsheet exports don't break matching.
+      function normalizeText(s) {
+        return (s || "").replace(/[\s\u3000]+/g, " ").trim();
       }
 
-      var existingByKey = {};
+      function matchKeyExact(o) {
+        return ["e", normalizeText(o.name), normalizeText(o.supplier), o.purchaseDate, o.purchasePrice].join("|");
+      }
+      // Fallback: name + purchase date only, in case supplier wording or the purchase
+      // price format drifted slightly between the original and the re-exported CSV.
+      function matchKeyLoose(o) {
+        return ["l", normalizeText(o.name), o.purchaseDate].join("|");
+      }
+      // Diagnostic only: tracks whether a row's product name exists among current
+      // items at all, so we can explain a 0-match result instead of failing silently.
+      function nameKey(o) {
+        return normalizeText(o.name);
+      }
+
+      var existingExact = {}, existingLoose = {}, existingNames = {};
       if (overwrite) {
         state.items.forEach(function (it, idx) {
-          var k = matchKey(it);
-          (existingByKey[k] = existingByKey[k] || []).push(idx);
+          var ek = matchKeyExact(it);
+          (existingExact[ek] = existingExact[ek] || []).push(idx);
+          var lk = matchKeyLoose(it);
+          (existingLoose[lk] = existingLoose[lk] || []).push(idx);
+          var nk = nameKey(it);
+          existingNames[nk] = true;
         });
       }
 
-      var imported = 0, updated = 0, skipped = 0;
+      var consumed = {};
+      function takeIndex(list) {
+        while (list && list.length) {
+          var idx = list.shift();
+          if (!consumed[idx]) { consumed[idx] = true; return idx; }
+        }
+        return null;
+      }
+
+      var imported = 0, updated = 0, skipped = 0, unmatchedNameHits = 0;
       var newPlatforms = [];
 
       dataRows.forEach(function (r) {
@@ -1537,14 +1566,20 @@
 
         var matchIdx = null;
         if (overwrite) {
-          var key = matchKey({ name: name, supplier: supplier, purchaseDate: purchaseDate, purchasePrice: purchasePrice });
-          if (existingByKey[key] && existingByKey[key].length) matchIdx = existingByKey[key].shift();
+          var rowForKey = { name: name, supplier: supplier, purchaseDate: purchaseDate, purchasePrice: purchasePrice };
+          matchIdx = takeIndex(existingExact[matchKeyExact(rowForKey)]);
+          if (matchIdx === null) matchIdx = takeIndex(existingLoose[matchKeyLoose(rowForKey)]);
+          if (matchIdx === null && existingNames[nameKey(rowForKey)]) unmatchedNameHits++;
         }
 
         if (matchIdx !== null) {
-          state.items[matchIdx] = Object.assign({}, state.items[matchIdx], {
+          state.items[matchIdx] = Object.assign({ id: state.items[matchIdx].id }, {
+            name: name,
+            supplier: supplier,
             platform: platform,
             status: status,
+            purchaseDate: purchaseDate,
+            purchasePrice: purchasePrice,
             saleDate: saleDate,
             salePrice: salePrice,
             saleQuantity: saleQuantity,
@@ -1590,6 +1625,9 @@
       if (overwrite) msg += "、" + updated + "件を更新";
       msg += "しました。";
       if (skipped) msg += "（商品名が空欄の行" + skipped + "件はスキップしました）";
+      if (overwrite && unmatchedNameHits) {
+        msg += "\n※商品名は一致する既存データが" + unmatchedNameHits + "件ありましたが、仕入日が一致しなかったため新規登録として扱いました。仕入日の表記が既存データと揃っているかご確認ください。";
+      }
       alert(msg);
       e.target.value = "";
     };
