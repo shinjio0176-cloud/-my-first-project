@@ -472,6 +472,10 @@
         ③ 「CSVファイルを選択」ボタンから、保存したファイルを選ぶと自動で取り込まれます<br><br>
         <strong>新しく管理表を作る場合</strong>は、「CSVテンプレートをダウンロード」した見本ファイルに直接入力してください。
       </p>
+      <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-bottom:10px;">
+        <input type="checkbox" id="csvImportOverwrite">
+        既存の同一商品（商品名・仕入先・仕入日・仕入額が一致）があれば追加せず上書きする
+      </label>
       <footer class="data-actions">
         <button class="btn secondary" id="btnDownloadTemplate">CSVテンプレートをダウンロード</button>
         <button class="btn" id="btnImportCsvTrigger">CSVファイルを選択</button>
@@ -480,7 +484,7 @@
       <p class="note" style="margin-top:10px;">
         対応している列名（1行目に1つずつ、順不同でOK）:<br>
         商品名（品名／商品／タイトルでも可） / 仕入先（仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 仕入日 / 仕入額（原価でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 想定手数料（手数料でも可） / 送料 / P払い額（Pt払い額／獲得ポイント／ポイントでも可） / メモ（詳細／備考でも可）。<br>
-        「商品名」列以外は無くても構いません。取り込んだデータは既存のデータに追加されます（上書きされません）。
+        「商品名」列以外は無くても構いません。上の「上書きする」にチェックを入れずに取り込んだ場合、データは既存のデータに追加されます（重複チェックはされません）。チェックを入れると、商品名・仕入先・仕入日・仕入額が同じ既存の商品を新規追加せずに更新します（同じ内容の商品が複数ある場合は先頭から順に1件ずつ対応づけます）。
       </p>
     </div>
     <div class="panel">
@@ -1489,7 +1493,21 @@
         return idx === undefined ? "" : (r[idx] || "");
       }
 
-      var imported = 0, skipped = 0;
+      var overwrite = document.getElementById("csvImportOverwrite").checked;
+
+      function matchKey(o) {
+        return [o.name, o.supplier, o.purchaseDate, o.purchasePrice].join("");
+      }
+
+      var existingByKey = {};
+      if (overwrite) {
+        state.items.forEach(function (it, idx) {
+          var k = matchKey(it);
+          (existingByKey[k] = existingByKey[k] || []).push(idx);
+        });
+      }
+
+      var imported = 0, updated = 0, skipped = 0;
       var newPlatforms = [];
 
       dataRows.forEach(function (r) {
@@ -1517,23 +1535,44 @@
           newPlatforms.push(platform);
         }
 
-        state.items.push({
-          id: uid(),
-          name: name,
-          supplier: supplier,
-          platform: platform,
-          status: status,
-          purchaseDate: purchaseDate,
-          purchasePrice: purchasePrice,
-          saleDate: saleDate,
-          salePrice: salePrice,
-          saleQuantity: saleQuantity,
-          fee: fee,
-          shipping: shipping,
-          points: points,
-          memo: memo
-        });
-        imported++;
+        var matchIdx = null;
+        if (overwrite) {
+          var key = matchKey({ name: name, supplier: supplier, purchaseDate: purchaseDate, purchasePrice: purchasePrice });
+          if (existingByKey[key] && existingByKey[key].length) matchIdx = existingByKey[key].shift();
+        }
+
+        if (matchIdx !== null) {
+          state.items[matchIdx] = Object.assign({}, state.items[matchIdx], {
+            platform: platform,
+            status: status,
+            saleDate: saleDate,
+            salePrice: salePrice,
+            saleQuantity: saleQuantity,
+            fee: fee,
+            shipping: shipping,
+            points: points,
+            memo: memo
+          });
+          updated++;
+        } else {
+          state.items.push({
+            id: uid(),
+            name: name,
+            supplier: supplier,
+            platform: platform,
+            status: status,
+            purchaseDate: purchaseDate,
+            purchasePrice: purchasePrice,
+            saleDate: saleDate,
+            salePrice: salePrice,
+            saleQuantity: saleQuantity,
+            fee: fee,
+            shipping: shipping,
+            points: points,
+            memo: memo
+          });
+          imported++;
+        }
       });
 
       if (newPlatforms.length) {
@@ -1547,7 +1586,9 @@
       renderDashboard();
       renderPlatformList();
 
-      var msg = imported + "件のデータを取り込みました。";
+      var msg = imported + "件を新規登録";
+      if (overwrite) msg += "、" + updated + "件を更新";
+      msg += "しました。";
       if (skipped) msg += "（商品名が空欄の行" + skipped + "件はスキップしました）";
       alert(msg);
       e.target.value = "";
