@@ -1334,6 +1334,18 @@
   var CSV_HEADERS = ["商品名", "仕入先", "プラットフォーム", "ステータス", "仕入日", "仕入額", "販売日", "販売額", "想定手数料", "送料", "P払い額", "メモ"];
   var STATUS_FROM_LABEL = { "在庫": "stock", "販売中": "listed", "出品中": "listed", "売却済み": "sold" };
 
+  // Exact match first; then fall back to a keyword search so real-world variations
+  // ("販売中（即日発送）", "在庫あり", "売却済(発送済)" etc.) still resolve correctly
+  // instead of silently falling through to "stock".
+  function inferStatusFromLabel(label) {
+    if (!label) return null;
+    if (STATUS_FROM_LABEL[label]) return STATUS_FROM_LABEL[label];
+    if (label.indexOf("売却") !== -1 || label.indexOf("完売") !== -1) return "sold";
+    if (label.indexOf("出品") !== -1 || label.indexOf("販売中") !== -1) return "listed";
+    if (label.indexOf("在庫") !== -1) return "stock";
+    return null;
+  }
+
   function csvEscape(v) {
     v = v == null ? "" : String(v);
     if (/[",\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
@@ -1566,6 +1578,7 @@
 
       var imported = 0, updated = 0, skipped = 0, unmatchedNameHits = 0, ambiguousSkipped = 0;
       var newPlatforms = [];
+      var unrecognizedStatusLabels = {};
 
       dataRows.forEach(function (r) {
         var name = field(r, "name").trim();
@@ -1596,7 +1609,10 @@
         var points = parseNumberLoose(pointsRaw);
         var memo = memoRaw;
 
-        var recognizedStatus = STATUS_FROM_LABEL[statusLabel];
+        var recognizedStatus = inferStatusFromLabel(statusLabel);
+        if (statusLabel && !recognizedStatus) {
+          unrecognizedStatusLabels[statusLabel] = (unrecognizedStatusLabels[statusLabel] || 0) + 1;
+        }
 
         if (state.platforms.indexOf(platform) === -1 && newPlatforms.indexOf(platform) === -1) {
           newPlatforms.push(platform);
@@ -1689,6 +1705,12 @@
       }
       if (overwrite && ambiguousSkipped) {
         msg += "\n※商品名・仕入先・仕入日・仕入額が同じ商品が複数あり、どれを更新すべきか判別できなかったため" + ambiguousSkipped + "件は新規登録として扱いました（誤って別の商品を上書きしないための安全策です）。該当商品は商品一覧から手動でご確認・整理をお願いします。";
+      }
+      var unrecognizedList = Object.keys(unrecognizedStatusLabels);
+      if (unrecognizedList.length) {
+        msg += "\n※ステータス列の値が「在庫」「販売中」「出品中」「売却済み」のいずれとも判断できなかった行があります: " +
+          unrecognizedList.map(function (k) { return "「" + k + "」(" + unrecognizedStatusLabels[k] + "件)"; }).join("、") +
+          "。該当行は販売額の有無に応じて在庫または売却済みとして登録されています（上書き更新の場合は既存のステータスを維持）。表記をご確認のうえ、必要であれば商品一覧から手動でステータスを修正してください。";
       }
       alert(msg);
       e.target.value = "";
