@@ -1542,23 +1542,33 @@
       dataRows.forEach(function (r) {
         var name = field(r, "name").trim();
         if (!name) { skipped++; return; }
-        var supplier = field(r, "supplier").trim();
-        var platform = field(r, "platform").trim() || state.platforms[0];
+        var supplierRaw = field(r, "supplier").trim();
+        var platformRaw = field(r, "platform").trim();
         var statusLabel = field(r, "status").trim();
-        var purchaseDate = parseFlexibleDate(field(r, "purchaseDate")) || "";
-        var purchaseYear = purchaseDate ? Number(purchaseDate.slice(0, 4)) : null;
-        var purchasePrice = parseNumberLoose(field(r, "purchasePrice"));
-        var saleDate = parseFlexibleDate(field(r, "saleDate"), purchaseYear);
+        var purchaseDateRaw = field(r, "purchaseDate").trim();
+        var purchasePriceRaw = field(r, "purchasePrice").trim();
+        var saleDateRaw = field(r, "saleDate").trim();
         var salePriceRaw = field(r, "salePrice").trim();
-        var salePrice = salePriceRaw !== "" ? parseNumberLoose(salePriceRaw) : null;
-        var saleQuantity = Math.max(1, parseInt(field(r, "saleQuantity"), 10) || 1);
-        var fee = parseNumberLoose(field(r, "fee"));
-        var shipping = parseNumberLoose(field(r, "shipping"));
-        var points = parseNumberLoose(field(r, "points"));
-        var memo = field(r, "memo").trim();
+        var saleQuantityRaw = field(r, "saleQuantity").trim();
+        var feeRaw = field(r, "fee").trim();
+        var shippingRaw = field(r, "shipping").trim();
+        var pointsRaw = field(r, "points").trim();
+        var memoRaw = field(r, "memo").trim();
 
-        var status = STATUS_FROM_LABEL[statusLabel];
-        if (!status) status = salePrice != null ? "sold" : "stock";
+        var supplier = supplierRaw;
+        var platform = platformRaw || state.platforms[0];
+        var purchaseDate = parseFlexibleDate(purchaseDateRaw) || "";
+        var purchaseYear = purchaseDate ? Number(purchaseDate.slice(0, 4)) : null;
+        var purchasePrice = parseNumberLoose(purchasePriceRaw);
+        var saleDate = parseFlexibleDate(saleDateRaw, purchaseYear);
+        var salePrice = salePriceRaw !== "" ? parseNumberLoose(salePriceRaw) : null;
+        var saleQuantity = Math.max(1, parseInt(saleQuantityRaw, 10) || 1);
+        var fee = parseNumberLoose(feeRaw);
+        var shipping = parseNumberLoose(shippingRaw);
+        var points = parseNumberLoose(pointsRaw);
+        var memo = memoRaw;
+
+        var recognizedStatus = STATUS_FROM_LABEL[statusLabel];
 
         if (state.platforms.indexOf(platform) === -1 && newPlatforms.indexOf(platform) === -1) {
           newPlatforms.push(platform);
@@ -1573,23 +1583,30 @@
         }
 
         if (matchIdx !== null) {
-          state.items[matchIdx] = Object.assign({ id: state.items[matchIdx].id }, {
+          // Merge, don't replace: a re-imported row with blank/unrecognized cells
+          // (e.g. a spreadsheet export that dropped a column) must not blank out or
+          // downgrade data the existing record already has (this previously turned
+          // "listed" items back into "stock" whenever the status cell wasn't recognized).
+          var existing = state.items[matchIdx];
+          var status = recognizedStatus || (salePrice != null ? "sold" : existing.status);
+          state.items[matchIdx] = Object.assign({ id: existing.id }, {
             name: name,
-            supplier: supplier,
-            platform: platform,
+            supplier: supplierRaw !== "" ? supplier : existing.supplier,
+            platform: platformRaw !== "" ? platform : existing.platform,
             status: status,
-            purchaseDate: purchaseDate,
-            purchasePrice: purchasePrice,
-            saleDate: saleDate,
-            salePrice: salePrice,
-            saleQuantity: saleQuantity,
-            fee: fee,
-            shipping: shipping,
-            points: points,
-            memo: memo
+            purchaseDate: purchaseDateRaw !== "" ? purchaseDate : existing.purchaseDate,
+            purchasePrice: purchasePriceRaw !== "" ? purchasePrice : existing.purchasePrice,
+            saleDate: saleDateRaw !== "" ? saleDate : existing.saleDate,
+            salePrice: salePriceRaw !== "" ? salePrice : existing.salePrice,
+            saleQuantity: saleQuantityRaw !== "" ? saleQuantity : existing.saleQuantity,
+            fee: feeRaw !== "" ? fee : existing.fee,
+            shipping: shippingRaw !== "" ? shipping : existing.shipping,
+            points: pointsRaw !== "" ? points : existing.points,
+            memo: memoRaw !== "" ? memo : existing.memo
           });
           updated++;
         } else {
+          var status = recognizedStatus || (salePrice != null ? "sold" : "stock");
           state.items.push({
             id: uid(),
             name: name,
