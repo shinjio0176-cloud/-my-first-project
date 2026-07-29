@@ -1756,14 +1756,20 @@
     memo: ["メモ", "詳細", "備考", "詳細/MEMO", "詳細 / MEMO", "メモ/詳細"]
   };
 
+  // For each field, match by alias priority (the order within its alias array), not by
+  // column position in the sheet. A sheet can legitimately contain both a field's primary
+  // header and an older/alternate one as separate columns (e.g. both "店名" and its legacy
+  // alias "仕入先"); picking whichever happens to sit further left would silently import
+  // the wrong column's data.
   function buildHeaderIndexMap(headerRow, aliases) {
+    var normalized = headerRow.map(function (h) { return (h || "").trim(); });
     var map = {};
-    headerRow.forEach(function (h, idx) {
-      var norm = (h || "").trim();
-      if (!norm) return;
-      Object.keys(aliases).forEach(function (key) {
-        if (map[key] !== undefined) return; // first matching column wins
-        if (aliases[key].indexOf(norm) !== -1) map[key] = idx;
+    Object.keys(aliases).forEach(function (key) {
+      aliases[key].some(function (alias) {
+        var idx = normalized.indexOf(alias);
+        if (idx === -1) return false;
+        map[key] = idx;
+        return true;
       });
     });
     return map;
