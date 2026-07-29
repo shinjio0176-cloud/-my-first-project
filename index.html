@@ -357,7 +357,7 @@
       <select id="filterPlatform">
         <option value="">全プラットフォーム</option>
       </select>
-      <input type="text" id="filterSearch" placeholder="商品名・仕入先で検索">
+      <input type="text" id="filterSearch" placeholder="商品名・店名で検索">
       <div class="spacer"></div>
       <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
       <button class="btn" id="btnNewItem2">＋ 新規登録</button>
@@ -369,7 +369,7 @@
             <tr>
               <th><input type="checkbox" id="itemsSelectAll"></th>
               <th>商品名</th>
-              <th>仕入先</th>
+              <th>店名</th>
               <th>プラットフォーム</th>
               <th>ステータス</th>
               <th class="num">仕入額</th>
@@ -486,7 +486,7 @@
       </p>
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;margin-bottom:10px;">
         <input type="checkbox" id="csvImportOverwrite">
-        既存の同一商品（商品名・仕入先・仕入日・仕入額が一致）があれば追加せず上書きする
+        既存の同一商品（商品名・店名・仕入日・仕入額が一致）があれば追加せず上書きする
       </label>
       <footer class="data-actions">
         <button class="btn secondary" id="btnDownloadTemplate">CSVテンプレートをダウンロード</button>
@@ -495,8 +495,8 @@
       </footer>
       <p class="note" style="margin-top:10px;">
         対応している列名（1行目に1つずつ、順不同でOK）:<br>
-        商品名（品名／商品／タイトルでも可） / 仕入先（仕入れ先／購入先／店舗でも可） / 店名 / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 仕入獲得ポイント / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売開始日（出品日でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / 獲得ポイント（P払い額／Pt払い額／ポイントでも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
-        「商品名」列以外は無くても構いません。上の「上書きする」にチェックを入れずに取り込んだ場合、データは既存のデータに追加されます（重複チェックはされません）。チェックを入れると、商品名・仕入先・仕入日・仕入額が同じ既存の商品を新規追加せずに更新します（同じ内容の商品が複数ある場合は先頭から順に1件ずつ対応づけます）。<br>
+        商品名（品名／商品／タイトルでも可） / 店名（仕入先／仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 仕入獲得ポイント / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売開始日（出品日でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / 獲得ポイント（P払い額／Pt払い額／ポイントでも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
+        「商品名」列以外は無くても構いません。上の「上書きする」にチェックを入れずに取り込んだ場合、データは既存のデータに追加されます（重複チェックはされません）。チェックを入れると、商品名・店名・仕入日・仕入額が同じ既存の商品を新規追加せずに更新します（同じ内容の商品が複数ある場合は先頭から順に1件ずつ対応づけます）。<br>
         ※以前は「販売開始日」「出品日」の見出しも売上日（販売日）として取り込んでいましたが、実際の出品開始日を記録できるよう、今回から専用の列として分けました。以前これらの見出しで売上日を管理していた場合は「販売日」に見出しを変更してください。
       </p>
     </div>
@@ -533,12 +533,8 @@
         <input type="text" id="f_name" placeholder="例: Nintendo Switch 本体">
       </div>
       <div class="field">
-        <label>仕入先</label>
-        <input type="text" id="f_supplier" placeholder="例: ハードオフ〇〇店">
-      </div>
-      <div class="field">
         <label>店名</label>
-        <input type="text" id="f_shopName" placeholder="任意">
+        <input type="text" id="f_supplier" placeholder="例: ハードオフ〇〇店">
       </div>
       <div class="field">
         <label>プラットフォーム</label>
@@ -1466,7 +1462,6 @@
     document.getElementById("itemModalTitle").textContent = item ? "商品を編集" : "商品を登録";
     document.getElementById("f_name").value = item ? item.name : "";
     document.getElementById("f_supplier").value = item ? item.supplier : "";
-    document.getElementById("f_shopName").value = item ? item.shopName || "" : "";
     document.getElementById("f_platform").value = item ? item.platform : state.platforms[0];
     document.getElementById("f_status").value = item ? item.status : "stock";
     document.getElementById("f_asin").value = item ? item.asin || "" : "";
@@ -1519,7 +1514,6 @@
     var payload = {
       name: name,
       supplier: document.getElementById("f_supplier").value.trim(),
-      shopName: document.getElementById("f_shopName").value.trim(),
       platform: document.getElementById("f_platform").value,
       status: document.getElementById("f_status").value,
       asin: document.getElementById("f_asin").value.trim(),
@@ -1604,7 +1598,7 @@
 
   // ---------- CSV template / import ----------
   var CSV_HEADERS = [
-    "商品名", "仕入先", "店名", "プラットフォーム", "ステータス", "商品種別", "ASIN", "検品",
+    "商品名", "店名", "プラットフォーム", "ステータス", "商品種別", "ASIN", "検品",
     "仕入日", "仕入額", "仕入送料", "仕入Pt払い額", "仕入獲得ポイント",
     "想定販路", "想定販売価格", "手数料率", "想定送料", "その他手数料",
     "販売開始日", "販売日", "販売額", "入金額", "販売数", "手数料", "送料", "獲得ポイント", "SKU", "処分",
@@ -1639,17 +1633,17 @@
 
   function buildTemplateCsv() {
     var exampleRows = [
-      ["Nintendo Switch 本体", "ハードオフ〇〇店", "", "メルカリ", "売却済み", "中古", "", "TRUE",
+      ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "中古", "", "TRUE",
         "2026-06-01", "15000", "0", "0", "0",
         "メルカリ", "22000", "10", "700", "0",
         "2026-06-03", "2026-06-10", "22000", "22000", "1", "2200", "700", "0", "", "FALSE",
         "動作確認済み"],
-      ["未使用ゲームソフト", "ヤフショ", "コジマ", "Amazon", "売却済み", "新品", "B0XXXXXXXX", "TRUE",
+      ["未使用ゲームソフト", "コジマ", "Amazon", "売却済み", "新品", "B0XXXXXXXX", "TRUE",
         "2026-06-20", "800", "0", "0", "98",
         "Amazon", "1800", "15", "0", "0",
         "2026-06-22", "2026-06-25", "1800", "1800", "1", "270", "0", "0", "20260620P702PG100", "FALSE",
         ""],
-      ["未使用ゲームソフト2", "ブックオフ〇〇店", "", "Amazon", "在庫", "新品", "", "FALSE",
+      ["未使用ゲームソフト2", "ブックオフ〇〇店", "Amazon", "在庫", "新品", "", "FALSE",
         "2026-07-01", "800", "0", "0", "0",
         "Amazon", "1500", "15", "0", "0",
         "", "", "", "", "", "", "", "", "", "FALSE",
@@ -1731,8 +1725,7 @@
   // (column order doesn't matter, and slightly different wording is tolerated)
   var HEADER_ALIASES = {
     name: ["商品名", "品名", "商品", "タイトル", "商品名称"],
-    supplier: ["仕入先", "仕入れ先", "購入先", "店舗", "仕入店舗"],
-    shopName: ["店名"],
+    supplier: ["店名", "仕入先", "仕入れ先", "購入先", "店舗", "仕入店舗"],
     platform: ["プラットフォーム", "販売先", "販売プラットフォーム", "出品先", "販売サイト", "販路"],
     status: ["ステータス", "状態", "状況"],
     productType: ["商品種別"],
@@ -1899,7 +1892,6 @@
         var name = field(r, "name").trim();
         if (!name) { skipped++; return; }
         var supplierRaw = field(r, "supplier").trim();
-        var shopNameRaw = field(r, "shopName").trim();
         var platformRaw = field(r, "platform").trim();
         var statusLabel = field(r, "status").trim();
         var productTypeRaw = field(r, "productType").trim();
@@ -1983,7 +1975,6 @@
           state.items[matchIdx] = Object.assign({ id: existing.id }, {
             name: name,
             supplier: supplierRaw !== "" ? supplier : existing.supplier,
-            shopName: shopNameRaw !== "" ? shopNameRaw : existing.shopName,
             platform: platformRaw !== "" ? platform : existing.platform,
             status: status,
             productType: productTypeRaw !== "" ? productTypeRaw : existing.productType,
@@ -2018,7 +2009,6 @@
             id: uid(),
             name: name,
             supplier: supplier,
-            shopName: shopNameRaw,
             platform: platform,
             status: status,
             productType: productTypeRaw,
@@ -2069,7 +2059,7 @@
         msg += "\n※商品名は一致する既存データが" + unmatchedNameHits + "件ありましたが、仕入日が一致しなかったため新規登録として扱いました。仕入日の表記が既存データと揃っているかご確認ください。";
       }
       if (overwrite && ambiguousSkipped) {
-        msg += "\n※商品名・仕入先・仕入日・仕入額が同じ商品が複数あり、どれを更新すべきか判別できなかったため" + ambiguousSkipped + "件は新規登録として扱いました（誤って別の商品を上書きしないための安全策です）。該当商品は商品一覧から手動でご確認・整理をお願いします。";
+        msg += "\n※商品名・店名・仕入日・仕入額が同じ商品が複数あり、どれを更新すべきか判別できなかったため" + ambiguousSkipped + "件は新規登録として扱いました（誤って別の商品を上書きしないための安全策です）。該当商品は商品一覧から手動でご確認・整理をお願いします。";
       }
       var unrecognizedList = Object.keys(unrecognizedStatusLabels);
       if (unrecognizedList.length) {
