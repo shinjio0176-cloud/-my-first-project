@@ -778,14 +778,18 @@
     return purchaseUnitAmount(item) * quantity;
   }
 
-  // Cash actually paid out of pocket at purchase time (after using purchase-side points).
+  // Cash actually paid out of pocket at purchase time (after using purchase-side points
+  // to pay). This is the "現金" cost basis — independent of purchasePointsEarned.
   function cashPaidAfterPurchasePoints(item) {
     return Math.max(0, itemCost(item) - (Number(item.purchasePointsUsed) || 0));
   }
 
-  // Net cost once purchase-side points earned back are also credited — the "実質仕入額" concept.
+  // The "実質仕入額" cost basis: the gross purchase amount discounted by points earned
+  // back, regardless of whether the purchase itself was paid in cash or points. This is
+  // NOT cashPaidAfterPurchasePoints minus points earned — it's a separate discount off
+  // the same gross itemCost, matching how the source spreadsheet computes it.
   function netPurchaseCost(item) {
-    return cashPaidAfterPurchasePoints(item) - (Number(item.purchasePointsEarned) || 0);
+    return Math.max(0, itemCost(item) - (Number(item.purchasePointsEarned) || 0));
   }
 
   // view: "cash" (現金のみ) or "total" (現金+P還元)
@@ -793,23 +797,29 @@
     return view === "total" ? netPurchaseCost(item) : cashPaidAfterPurchasePoints(item);
   }
 
-  function saleAmountOf(item) {
-    return item.depositAmount != null ? Number(item.depositAmount) : Number(item.salePrice) || 0;
-  }
-
-  function profitOf(item) {
+  // Realized profit for a given cost basis. When 入金額 is entered it is already net of
+  // the platform's fee (that's what "入金額" means for Amazon/FBA-style payouts), so the
+  // fee field must not be subtracted again on top of it — only when there's no 入金額ing
+  // and 販売額 (gross) is being used directly does the fee still need to be subtracted.
+  function realizedProfit(item, cost) {
     if (item.status === "stock" || item.salePrice == null) return null;
-    var sale = saleAmountOf(item);
-    var cost = cashPaidAfterPurchasePoints(item);
-    var fee = Number(item.fee) || 0;
     var ship = Number(item.shipping) || 0;
+    if (item.depositAmount != null) {
+      return Number(item.depositAmount) - cost - ship;
+    }
+    var sale = Number(item.salePrice) || 0;
+    var fee = Number(item.fee) || 0;
     return sale - cost - fee - ship;
   }
 
+  function profitOf(item) {
+    return realizedProfit(item, cashPaidAfterPurchasePoints(item));
+  }
+
   function totalProfitOf(item) {
-    var cash = profitOf(item);
-    if (cash === null) return null;
-    return cash + (Number(item.purchasePointsEarned) || 0) + (Number(item.points) || 0);
+    var base = realizedProfit(item, netPurchaseCost(item));
+    if (base === null) return null;
+    return base + (Number(item.points) || 0);
   }
 
   function profitForView(item, view) {
