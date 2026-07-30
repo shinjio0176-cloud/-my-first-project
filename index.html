@@ -495,7 +495,7 @@
       </footer>
       <p class="note" style="margin-top:10px;">
         対応している列名（1行目に1つずつ、順不同でOK）:<br>
-        商品名（品名／商品／タイトルでも可） / 店名（仕入先／仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 仕入獲得ポイント / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売開始日（出品日でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / 獲得ポイント（P払い額／Pt払い額／ポイントでも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
+        商品名（品名／商品／タイトルでも可） / 店名（仕入先／仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 実質仕入額（Pt還元後の実質的な仕入コスト。未入力の場合は仕入額と同額として計算） / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売開始日（出品日でも可） / 販売日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / 獲得ポイント（P払い額／Pt払い額／ポイントでも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
         「商品名」列以外は無くても構いません。上の「上書きする」にチェックを入れずに取り込んだ場合、データは既存のデータに追加されます（重複チェックはされません）。チェックを入れると、商品名・店名・仕入日・仕入額が同じ既存の商品を新規追加せずに更新します（同じ内容の商品が複数ある場合は先頭から順に1件ずつ対応づけます）。<br>
         ※以前は「販売開始日」「出品日」の見出しも売上日（販売日）として取り込んでいましたが、実際の出品開始日を記録できるよう、今回から専用の列として分けました。以前これらの見出しで売上日を管理していた場合は「販売日」に見出しを変更してください。
       </p>
@@ -582,8 +582,8 @@
         <input type="number" id="f_purchasePointsUsed" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
-        <label>獲得ポイント（仕入時・円換算）</label>
-        <input type="number" id="f_purchasePointsEarned" min="0" step="1" placeholder="0">
+        <label>実質仕入額（円・Pt還元後）</label>
+        <input type="number" id="f_purchaseNetCost" min="0" step="1" placeholder="未入力の場合は仕入額と同額">
       </div>
 
       <div class="field-section full">想定販売（計画）</div>
@@ -779,17 +779,16 @@
   }
 
   // Cash actually paid out of pocket at purchase time (after using purchase-side points
-  // to pay). This is the "現金" cost basis — independent of purchasePointsEarned.
+  // to pay). This is the "現金" cost basis — independent of purchaseNetCost.
   function cashPaidAfterPurchasePoints(item) {
     return Math.max(0, itemCost(item) - (Number(item.purchasePointsUsed) || 0));
   }
 
-  // The "実質仕入額" cost basis: the gross purchase amount discounted by points earned
-  // back, regardless of whether the purchase itself was paid in cash or points. This is
-  // NOT cashPaidAfterPurchasePoints minus points earned — it's a separate discount off
-  // the same gross itemCost, matching how the source spreadsheet computes it.
+  // The "実質仕入額" cost basis (Pt還元後の実質的な仕入コスト). Entered directly since it's
+  // usually already a computed column in the source spreadsheet — no subtraction required
+  // from the user. Defaults to the gross itemCost (no point discount assumed) when blank.
   function netPurchaseCost(item) {
-    return Math.max(0, itemCost(item) - (Number(item.purchasePointsEarned) || 0));
+    return Math.max(0, item.purchaseNetCost != null ? Number(item.purchaseNetCost) : itemCost(item));
   }
 
   // view: "cash" (現金のみ) or "total" (現金+P還元)
@@ -1412,7 +1411,7 @@
 
   // Fields that feed the live 損益分岐価格/想定ROI/実績ROI readouts in the item modal.
   var ITEM_CALC_FIELD_IDS = [
-    "f_purchasePrice", "f_purchaseShipping", "f_purchasePointsUsed", "f_purchasePointsEarned",
+    "f_purchasePrice", "f_purchaseShipping", "f_purchasePointsUsed", "f_purchaseNetCost",
     "f_saleQuantity", "f_plannedSalePrice", "f_feeRate", "f_plannedShipping", "f_otherFee",
     "f_saleDate", "f_listingStartDate", "f_salePrice", "f_depositAmount", "f_fee", "f_shipping", "f_points"
   ];
@@ -1430,7 +1429,7 @@
       purchasePrice: numVal("f_purchasePrice"),
       purchaseShipping: numVal("f_purchaseShipping"),
       purchasePointsUsed: numVal("f_purchasePointsUsed"),
-      purchasePointsEarned: numVal("f_purchasePointsEarned"),
+      purchaseNetCost: document.getElementById("f_purchaseNetCost").value === "" ? null : numVal("f_purchaseNetCost"),
       saleQuantity: Number(document.getElementById("f_saleQuantity").value) || 1,
       plannedSalePrice: numVal("f_plannedSalePrice"),
       feeRate: numVal("f_feeRate"),
@@ -1494,7 +1493,7 @@
     document.getElementById("f_quantity").value = "1";
     document.getElementById("f_quantity_wrap").style.display = item ? "none" : "";
     document.getElementById("f_purchasePointsUsed").value = item && item.purchasePointsUsed != null ? item.purchasePointsUsed : "";
-    document.getElementById("f_purchasePointsEarned").value = item && item.purchasePointsEarned != null ? item.purchasePointsEarned : "";
+    document.getElementById("f_purchaseNetCost").value = item && item.purchaseNetCost != null ? item.purchaseNetCost : "";
     document.getElementById("f_plannedPlatform").value = item ? (item.plannedPlatform || item.platform) : state.platforms[0];
     document.getElementById("f_plannedSalePrice").value = item && item.plannedSalePrice != null ? item.plannedSalePrice : "";
     document.getElementById("f_feeRate").value = item && item.feeRate != null ? item.feeRate : "";
@@ -1544,7 +1543,7 @@
       purchasePrice: Number(document.getElementById("f_purchasePrice").value) || 0,
       purchaseShipping: document.getElementById("f_purchaseShipping").value === "" ? 0 : Number(document.getElementById("f_purchaseShipping").value),
       purchasePointsUsed: document.getElementById("f_purchasePointsUsed").value === "" ? 0 : Number(document.getElementById("f_purchasePointsUsed").value),
-      purchasePointsEarned: document.getElementById("f_purchasePointsEarned").value === "" ? 0 : Number(document.getElementById("f_purchasePointsEarned").value),
+      purchaseNetCost: document.getElementById("f_purchaseNetCost").value === "" ? null : Number(document.getElementById("f_purchaseNetCost").value),
       plannedPlatform: document.getElementById("f_plannedPlatform").value,
       plannedSalePrice: document.getElementById("f_plannedSalePrice").value === "" ? null : Number(document.getElementById("f_plannedSalePrice").value),
       feeRate: document.getElementById("f_feeRate").value === "" ? 0 : Number(document.getElementById("f_feeRate").value),
@@ -1620,7 +1619,7 @@
   // ---------- CSV template / import ----------
   var CSV_HEADERS = [
     "商品名", "店名", "プラットフォーム", "ステータス", "商品種別", "ASIN", "検品",
-    "仕入日", "仕入額", "仕入送料", "仕入Pt払い額", "仕入獲得ポイント",
+    "仕入日", "仕入額", "仕入送料", "仕入Pt払い額", "実質仕入額",
     "想定販路", "想定販売価格", "手数料率", "想定送料", "その他手数料",
     "販売開始日", "販売日", "販売額", "入金額", "販売数", "手数料", "送料", "獲得ポイント", "SKU", "処分",
     "メモ"
@@ -1655,17 +1654,17 @@
   function buildTemplateCsv() {
     var exampleRows = [
       ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "中古", "", "TRUE",
-        "2026-06-01", "15000", "0", "0", "0",
+        "2026-06-01", "15000", "0", "0", "15000",
         "メルカリ", "22000", "10", "700", "0",
         "2026-06-03", "2026-06-10", "22000", "22000", "1", "2200", "700", "0", "", "FALSE",
         "動作確認済み"],
       ["未使用ゲームソフト", "コジマ", "Amazon", "売却済み", "新品", "B0XXXXXXXX", "TRUE",
-        "2026-06-20", "800", "0", "0", "98",
+        "2026-06-20", "800", "0", "0", "702",
         "Amazon", "1800", "15", "0", "0",
         "2026-06-22", "2026-06-25", "1800", "1800", "1", "270", "0", "0", "20260620P702PG100", "FALSE",
         ""],
       ["未使用ゲームソフト2", "ブックオフ〇〇店", "Amazon", "在庫", "新品", "", "FALSE",
-        "2026-07-01", "800", "0", "0", "0",
+        "2026-07-01", "800", "0", "0", "800",
         "Amazon", "1500", "15", "0", "0",
         "", "", "", "", "", "", "", "", "", "FALSE",
         ""]
@@ -1756,7 +1755,7 @@
     purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
     purchaseShipping: ["仕入送料"],
     purchasePointsUsed: ["仕入Pt払い額", "仕入Pt払い額（円）", "Pt払い額(仕入)"],
-    purchasePointsEarned: ["仕入獲得ポイント", "獲得ポイント(仕入)"],
+    purchaseNetCost: ["実質仕入額"],
     plannedPlatform: ["想定販路"],
     plannedSalePrice: ["想定販売価格"],
     feeRate: ["手数料率"],
@@ -1928,7 +1927,7 @@
         var purchasePriceRaw = field(r, "purchasePrice").trim();
         var purchaseShippingRaw = field(r, "purchaseShipping").trim();
         var purchasePointsUsedRaw = field(r, "purchasePointsUsed").trim();
-        var purchasePointsEarnedRaw = field(r, "purchasePointsEarned").trim();
+        var purchaseNetCostRaw = field(r, "purchaseNetCost").trim();
         var plannedPlatformRaw = field(r, "plannedPlatform").trim();
         var plannedSalePriceRaw = field(r, "plannedSalePrice").trim();
         var feeRateRaw = field(r, "feeRate").trim();
@@ -2011,7 +2010,7 @@
             purchasePrice: purchasePriceRaw !== "" ? purchasePrice : existing.purchasePrice,
             purchaseShipping: purchaseShippingRaw !== "" ? parseNumberLoose(purchaseShippingRaw) : existing.purchaseShipping,
             purchasePointsUsed: purchasePointsUsedRaw !== "" ? parseNumberLoose(purchasePointsUsedRaw) : existing.purchasePointsUsed,
-            purchasePointsEarned: purchasePointsEarnedRaw !== "" ? parseNumberLoose(purchasePointsEarnedRaw) : existing.purchasePointsEarned,
+            purchaseNetCost: purchaseNetCostRaw !== "" ? parseNumberLoose(purchaseNetCostRaw) : existing.purchaseNetCost,
             plannedPlatform: plannedPlatformRaw !== "" ? plannedPlatformRaw : existing.plannedPlatform,
             plannedSalePrice: plannedSalePriceRaw !== "" ? parseNumberLoose(plannedSalePriceRaw) : existing.plannedSalePrice,
             feeRate: feeRateRaw !== "" ? parseNumberLoose(feeRateRaw) : existing.feeRate,
@@ -2045,7 +2044,7 @@
             purchasePrice: purchasePrice,
             purchaseShipping: parseNumberLoose(purchaseShippingRaw),
             purchasePointsUsed: parseNumberLoose(purchasePointsUsedRaw),
-            purchasePointsEarned: parseNumberLoose(purchasePointsEarnedRaw),
+            purchaseNetCost: purchaseNetCostRaw !== "" ? parseNumberLoose(purchaseNetCostRaw) : null,
             plannedPlatform: plannedPlatformRaw || platform,
             plannedSalePrice: plannedSalePriceRaw !== "" ? parseNumberLoose(plannedSalePriceRaw) : null,
             feeRate: parseNumberLoose(feeRateRaw),
