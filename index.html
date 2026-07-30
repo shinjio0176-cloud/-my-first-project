@@ -849,11 +849,20 @@
     return Math.round((Number(item.plannedSalePrice) || 0) * (Number(item.feeRate) || 0) / 100);
   }
 
+  // The planned/想定 cash-view profit is computed against the gross purchase amount
+  // (itemCost), not the cash-after-points cost — the source spreadsheet treats the
+  // "現金" plan as if paid in full regardless of points, only the "現金+P還元" plan
+  // credits the point discount (via netPurchaseCost). Only the *realized* cash profit
+  // (profitOf) uses cashPaidAfterPurchasePoints — verified against real sold-item data.
+  function plannedCostForView(item, view) {
+    return view === "total" ? netPurchaseCost(item) : itemCost(item);
+  }
+
   // Solves plannedSalePrice*(1-feeRate%) - plannedShipping - otherFee = cost for plannedSalePrice.
   function breakevenPrice(item, view) {
     var feeRate = Number(item.feeRate) || 0;
     if (feeRate >= 100) return null;
-    var cost = costForView(item, view);
+    var cost = plannedCostForView(item, view);
     var plannedShipping = Number(item.plannedShipping) || 0;
     var otherFee = Number(item.otherFee) || 0;
     return Math.round((cost + plannedShipping + otherFee) / (1 - feeRate / 100));
@@ -861,20 +870,22 @@
 
   function expectedProfit(item, view) {
     if (!item.plannedSalePrice) return null;
-    var cost = costForView(item, view);
+    var cost = plannedCostForView(item, view);
     var plannedShipping = Number(item.plannedShipping) || 0;
     var otherFee = Number(item.otherFee) || 0;
     return Number(item.plannedSalePrice) - cost - plannedFee(item) - plannedShipping - otherFee;
   }
 
+  // ROI always divides by the gross purchase amount (itemCost) — both the "現金" and
+  // "現金+P還元" ROI figures share this same denominator in the source spreadsheet, for
+  // both planned and realized figures. Only the profit numerator differs between views.
   function expectedRoi(item, view) {
     var profit = expectedProfit(item, view);
-    if (profit === null) return null;
-    return roiOf(profit, costForView(item, view));
+    return roiOf(profit, itemCost(item));
   }
 
   function actualRoi(item, view) {
-    return roiOf(profitForView(item, view), costForView(item, view));
+    return roiOf(profitForView(item, view), itemCost(item));
   }
 
   function roiDeviation(item, view) {
