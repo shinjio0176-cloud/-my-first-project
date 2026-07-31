@@ -384,7 +384,8 @@
               <th class="num">現金+P還元利益率</th>
               <th class="num">想定ROIとの乖離率</th>
               <th>仕入日</th>
-              <th>販売日</th>
+              <th>販売開始日</th>
+              <th>売上日</th>
               <th></th>
             </tr>
           </thead>
@@ -1224,6 +1225,7 @@
         '<td class="num ' + totalCls + '">' + totalMarginCell + "</td>" +
         '<td class="num ' + deviationCls + '">' + deviationCell + "</td>" +
         "<td>" + (item.purchaseDate || "—") + "</td>" +
+        "<td>" + (item.listingStartDate || "—") + "</td>" +
         "<td>" + (item.saleDate || "—") + "</td>" +
         '<td><button class="icon-btn edit" data-id="' + item.id + '">編集</button><button class="icon-btn del" data-id="' + item.id + '">削除</button></td>' +
       "</tr>";
