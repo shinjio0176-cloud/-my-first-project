@@ -1163,15 +1163,44 @@
     emptyState.style.display = "none";
 
     tbody.innerHTML = filtered.map(function (item) {
-      var cashProfit = profitOf(item);
-      var totalProfit = totalProfitOf(item);
       var isRealized = item.status === "sold";
-      var cashCell = cashProfit === null ? "—" : yen(cashProfit);
-      var cashCls = (cashProfit === null || !isRealized) ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
-      var totalCell = totalProfit === null ? "—" : yen(totalProfit);
-      var totalCls = (totalProfit === null || !isRealized) ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
-      var cashMarginCell = formatMargin(cashProfit, item.salePrice);
-      var totalMarginCell = formatMargin(totalProfit, item.salePrice);
+      var salePriceCell, saleQtyCell, feeCell, shippingCell, pointsCell;
+      var cashCell, cashCls, totalCell, totalCls, cashMarginCell, totalMarginCell;
+
+      if (isRealized) {
+        var cashProfit = profitOf(item);
+        var totalProfit = totalProfitOf(item);
+        salePriceCell = item.salePrice != null ? yen(item.salePrice) : "—";
+        saleQtyCell = item.salePrice != null ? (Number(item.saleQuantity) || 1) : "—";
+        feeCell = item.salePrice != null ? yen(item.fee) : "—";
+        shippingCell = item.salePrice != null ? yen(item.shipping) : "—";
+        pointsCell = item.salePrice != null ? yen(item.points) : "—";
+        cashCell = cashProfit === null ? "—" : yen(cashProfit);
+        cashCls = cashProfit === null ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+        totalCell = totalProfit === null ? "—" : yen(totalProfit);
+        totalCls = totalProfit === null ? "" : (totalProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
+        cashMarginCell = formatMargin(cashProfit, item.salePrice);
+        totalMarginCell = formatMargin(totalProfit, item.salePrice);
+      } else {
+        // 在庫／販売中の商品は、まだ実績が無いので想定（計画）値を代わりに表示する。
+        // 実績の利益（緑/赤で色分け）と混同しないよう、色は付けず通常のテキスト色
+        // （黒）のまま表示する。
+        var hasPlanned = item.plannedSalePrice != null;
+        var expCash = expectedProfit(item, "cash");
+        var expTotal = expectedProfit(item, "total");
+        salePriceCell = hasPlanned ? yen(item.plannedSalePrice) : "—";
+        saleQtyCell = Number(item.saleQuantity) || 1;
+        feeCell = hasPlanned ? yen(plannedFee(item)) : "—";
+        shippingCell = hasPlanned ? yen(item.plannedShipping) : "—";
+        pointsCell = "—";
+        cashCell = expCash === null ? "—" : yen(expCash);
+        cashCls = "";
+        totalCell = expTotal === null ? "—" : yen(expTotal);
+        totalCls = "";
+        cashMarginCell = formatMargin(expCash, item.plannedSalePrice);
+        totalMarginCell = formatMargin(expTotal, item.plannedSalePrice);
+      }
+
       var deviation = roiDeviation(item, "total");
       var deviationCell = deviation === null ? "—" : (deviation > 0 ? "+" : "") + deviation + "%";
       var deviationCls = deviation === null ? "" : (deviation >= 0 ? "profit-cell profit" : "profit-cell loss");
@@ -1184,11 +1213,11 @@
         "<td>" + escapeHtml(item.platform || "—") + "</td>" +
         "<td>" + statusBadges + "</td>" +
         '<td class="num">' + yen(item.purchasePrice) + "</td>" +
-        '<td class="num">' + (item.salePrice != null ? yen(item.salePrice) : "—") + "</td>" +
-        '<td class="num">' + (item.salePrice != null ? (Number(item.saleQuantity) || 1) : "—") + "</td>" +
-        '<td class="num">' + (item.salePrice != null ? yen(item.fee) : "—") + "</td>" +
-        '<td class="num">' + (item.salePrice != null ? yen(item.shipping) : "—") + "</td>" +
-        '<td class="num">' + (item.salePrice != null ? yen(item.points) : "—") + "</td>" +
+        '<td class="num">' + salePriceCell + "</td>" +
+        '<td class="num">' + saleQtyCell + "</td>" +
+        '<td class="num">' + feeCell + "</td>" +
+        '<td class="num">' + shippingCell + "</td>" +
+        '<td class="num">' + pointsCell + "</td>" +
         '<td class="num ' + cashCls + '">' + cashCell + "</td>" +
         '<td class="num ' + cashCls + '">' + cashMarginCell + "</td>" +
         '<td class="num ' + totalCls + '">' + totalCell + "</td>" +
