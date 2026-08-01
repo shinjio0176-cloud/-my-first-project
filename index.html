@@ -338,7 +338,7 @@
       <h2>年次サマリー <span class="hint">費用（固定費+変動費）差引後の純利益</span></h2>
       <div class="table-wrap">
         <table id="yearlyTable">
-          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">想定手数料+送料</th><th class="num">P払い額</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（現金+P還元）</th></tr></thead>
+          <thead><tr><th>年</th><th class="num">売上</th><th class="num">仕入</th><th class="num">手数料+送料</th><th class="num">獲得ポイント</th><th class="num">費用</th><th class="num">純利益（現金）</th><th class="num">純利益（現金+P還元）</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -357,7 +357,7 @@
       <select id="filterPlatform">
         <option value="">全プラットフォーム</option>
       </select>
-      <input type="text" id="filterSearch" placeholder="商品名・店名で検索">
+      <input type="text" id="filterSearch" placeholder="商品名・店名・ASIN・SKUで検索">
       <div class="spacer"></div>
       <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
       <button class="btn" id="btnNewItem2">＋ 新規登録</button>
@@ -375,9 +375,9 @@
               <th class="num">仕入額</th>
               <th class="num">販売額</th>
               <th class="num">販売数</th>
-              <th class="num">想定手数料</th>
+              <th class="num">手数料</th>
               <th class="num">送料</th>
-              <th class="num">P払い額</th>
+              <th class="num">獲得ポイント</th>
               <th class="num">現金利益</th>
               <th class="num">現金利益率</th>
               <th class="num">現金+P還元利益</th>
@@ -1139,7 +1139,7 @@
       if (statusFilter && item.status !== statusFilter) return false;
       if (platformFilter && item.platform !== platformFilter) return false;
       if (search) {
-        var hay = ((item.name || "") + " " + (item.supplier || "")).toLowerCase();
+        var hay = ((item.name || "") + " " + (item.supplier || "") + " " + (item.asin || "") + " " + (item.sku || "")).toLowerCase();
         if (hay.indexOf(search) === -1) return false;
       }
       return true;
@@ -1518,8 +1518,10 @@
     var draft = readItemFormAsDraft();
     document.getElementById("f_plannedCalc").innerHTML =
       calcLine("現金のみ", "cash", draft) + "<br>" + calcLine("現金+P還元", "total", draft);
+    var days = daysListed(draft);
     document.getElementById("f_actualCalc").innerHTML =
-      actualLine("現金のみ", "cash", draft) + "<br>" + actualLine("現金+P還元", "total", draft);
+      actualLine("現金のみ", "cash", draft) + "<br>" + actualLine("現金+P還元", "total", draft) +
+      "<br>販売日数: " + (days === null ? "—" : days + "日");
   }
 
   ITEM_CALC_FIELD_IDS.concat(["f_status"]).forEach(function (id) {
@@ -1788,7 +1790,9 @@
 
   function parseNumberLoose(v) {
     if (v == null || v === "") return 0;
-    var n = Number(String(v).replace(/[¥,\s]/g, ""));
+    // "%" is stripped too — 手数料率/還元率 columns are commonly exported as "11.0%",
+    // and without this the value silently became 0 instead of 11.
+    var n = Number(String(v).replace(/[¥%,\s]/g, ""));
     return isNaN(n) ? 0 : n;
   }
 
