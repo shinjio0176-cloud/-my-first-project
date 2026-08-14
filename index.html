@@ -1528,6 +1528,23 @@
     document.getElementById(id).addEventListener("input", updateItemModalComputed);
   });
 
+  // 日付を入力するとステータスを自動的に進める（在庫→販売中→売却済み）。
+  // 逆方向（日付を消したらステータスを戻す）は、意図しない格下げを避けるため行わない。
+  document.getElementById("f_listingStartDate").addEventListener("change", function () {
+    var statusSel = document.getElementById("f_status");
+    if (this.value && statusSel.value === "stock") {
+      statusSel.value = "listed";
+      updateItemModalComputed();
+    }
+  });
+
+  document.getElementById("f_saleDate").addEventListener("change", function () {
+    if (this.value) {
+      document.getElementById("f_status").value = "sold";
+      updateItemModalComputed();
+    }
+  });
+
   function openItemModal(id) {
     state.editingId = id || null;
     var item = id ? state.items.find(function (i) { return i.id === id; }) : null;
