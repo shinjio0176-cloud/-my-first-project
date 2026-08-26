@@ -197,6 +197,7 @@
     color: var(--text);
     font-family: inherit;
   }
+  input[readonly] { background: #eef0f3; color: var(--muted); }
   .btn {
     border: none;
     border-radius: 6px;
@@ -289,6 +290,7 @@
       --accent-soft: #1e3a5f;
     }
     select, input[type=text], input[type=number], input[type=date] { background: #12141a; color: var(--text); }
+    input[readonly] { background: #262a35; color: var(--muted); }
     .modal { background: #1c1f27; }
     tbody tr:hover { background: #20232c; }
     .btn.secondary { background: #2b2f3a; color: var(--text); }
@@ -373,11 +375,11 @@
               <th>プラットフォーム</th>
               <th>ステータス</th>
               <th class="num">仕入額</th>
+              <th class="num">獲得ポイント</th>
               <th class="num">販売額</th>
               <th class="num">販売数</th>
               <th class="num">手数料</th>
               <th class="num">送料</th>
-              <th class="num">獲得ポイント</th>
               <th class="num">現金利益</th>
               <th class="num">現金利益率</th>
               <th class="num">現金+P還元利益</th>
@@ -496,9 +498,10 @@
       </footer>
       <p class="note" style="margin-top:10px;">
         対応している列名（1行目に1つずつ、順不同でOK）:<br>
-        商品名（品名／商品／タイトルでも可） / 店名（仕入先／仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 実質仕入額（Pt還元後の実質的な仕入コスト。未入力の場合は仕入額と同額として計算） / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売日（出品日でも可） / 売上日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / 獲得ポイント（P払い額／Pt払い額／ポイントでも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
+        商品名（品名／商品／タイトルでも可） / 店名（仕入先／仕入れ先／購入先／店舗でも可） / プラットフォーム（販売先／出品先でも可） / ステータス（在庫・販売中・売却済みのいずれかを入力） / 商品種別 / ASIN / 検品 / 仕入日 / 仕入額（原価でも可） / 仕入送料 / 仕入Pt払い額 / 獲得ポイント（仕入時に獲得したポイントの円換算額。この値をもとに実質仕入額を自動計算） / 実質仕入額（獲得ポイントを未入力の場合のみ直接指定可。それ以外は自動計算された値が優先されます） / 想定販路 / 想定販売価格 / 手数料率 / 想定送料 / その他手数料 / 販売日（出品日でも可） / 売上日（売却日でも可） / 販売額（売価でも可） / 入金額 / 販売数 / 手数料（想定手数料でも可） / 送料（自己払い送料でも可） / SKU / 処分 / メモ（詳細／備考でも可）。<br>
         「商品名」列以外は無くても構いません。上の「上書きする」にチェックを入れずに取り込んだ場合、データは既存のデータに追加されます（重複チェックはされません）。チェックを入れると、商品名・店名・仕入日・仕入額が同じ既存の商品を新規追加せずに更新します（同じ内容の商品が複数ある場合は先頭から順に1件ずつ対応づけます）。<br>
-        ※表記を変更しました。「販売日」は出品を開始した日（旧「販売開始日」）、「売上日」は売上が確定した日（旧「販売日」）を指します。以前「販売日」の見出しで売上が確定した日を管理していた場合は、見出しを「売上日」に変更してください。
+        ※表記を変更しました。「販売日」は出品を開始した日（旧「販売開始日」）、「売上日」は売上が確定した日（旧「販売日」）を指します。以前「販売日」の見出しで売上が確定した日を管理していた場合は、見出しを「売上日」に変更してください。<br>
+        ※「獲得ポイント」欄は、以前は売却時のポイントを入力する欄として実績側にありましたが、仕入時に獲得したポイントを入力する欄として仕入側に移動し、入力すると実質仕入額が自動計算されるようになりました。
       </p>
     </div>
     <div class="panel">
@@ -583,8 +586,12 @@
         <input type="number" id="f_purchasePointsUsed" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
-        <label>実質仕入額（円・Pt還元後）</label>
-        <input type="number" id="f_purchaseNetCost" min="0" step="1" placeholder="未入力の場合は仕入額と同額">
+        <label>獲得ポイント（仕入時・円換算）</label>
+        <input type="number" id="f_purchasePointsEarned" min="0" step="1" placeholder="0">
+      </div>
+      <div class="field">
+        <label>実質仕入額（円・自動計算）</label>
+        <input type="text" id="f_purchaseNetCost" readonly>
       </div>
 
       <div class="field-section full">想定販売（計画）</div>
@@ -634,10 +641,6 @@
       <div class="field">
         <label>送料（自己負担・円）</label>
         <input type="number" id="f_shipping" min="0" step="1" placeholder="0">
-      </div>
-      <div class="field">
-        <label>獲得ポイント（売却時・円換算）</label>
-        <input type="number" id="f_points" min="0" step="1" placeholder="0">
       </div>
       <div class="field">
         <label>販売数（まとめて1つの取引として売る個数）</label>
@@ -785,10 +788,14 @@
     return Math.max(0, itemCost(item) - (Number(item.purchasePointsUsed) || 0));
   }
 
-  // The "実質仕入額" cost basis (Pt還元後の実質的な仕入コスト). Entered directly since it's
-  // usually already a computed column in the source spreadsheet — no subtraction required
-  // from the user. Defaults to the gross itemCost (no point discount assumed) when blank.
+  // The "実質仕入額" cost basis (Pt還元後の実質的な仕入コスト), auto-computed from
+  // 獲得ポイント（仕入時）: itemCost - purchasePointsEarned. purchaseNetCost is kept only
+  // as a fallback for items saved before this field existed (when 実質仕入額 was a direct
+  // manual entry) — new saves never write purchaseNetCost once purchasePointsEarned is set.
   function netPurchaseCost(item) {
+    if (item.purchasePointsEarned != null) {
+      return Math.max(0, itemCost(item) - Number(item.purchasePointsEarned));
+    }
     return Math.max(0, item.purchaseNetCost != null ? Number(item.purchaseNetCost) : itemCost(item));
   }
 
@@ -817,9 +824,7 @@
   }
 
   function totalProfitOf(item) {
-    var base = realizedProfit(item, netPurchaseCost(item), true);
-    if (base === null) return null;
-    return base + (Number(item.points) || 0);
+    return realizedProfit(item, netPurchaseCost(item), true);
   }
 
   // Net-income basis for dashboard/yearly "純利益": the source spreadsheet tracks
@@ -833,9 +838,7 @@
   }
 
   function netIncomeTotalProfitOf(item) {
-    var base = realizedProfit(item, netPurchaseCost(item), false);
-    if (base === null) return null;
-    return base + (Number(item.points) || 0);
+    return realizedProfit(item, netPurchaseCost(item), false);
   }
 
   function profitForView(item, view) {
@@ -1095,7 +1098,7 @@
       byYear[y].revenue += Number(item.salePrice) || 0;
       byYear[y].cost += itemCost(item);
       byYear[y].feeShip += (Number(item.fee) || 0) + (Number(item.shipping) || 0);
-      byYear[y].points += Number(item.points) || 0;
+      byYear[y].points += Number(item.purchasePointsEarned) || 0;
       // 純利益（この表の右2列）は送料を差し引かない基準を使う — 送料は費用管理側の
       // 経費（変動費「納品送料」等）で計上される前提。スプレッドシートの「■全体実績」
       // 純利益ロールアップと一致することを確認済み。
@@ -1165,7 +1168,8 @@
 
     tbody.innerHTML = filtered.map(function (item) {
       var isRealized = item.status === "sold";
-      var salePriceCell, saleQtyCell, feeCell, shippingCell, pointsCell;
+      var purchasePointsEarnedCell = item.purchasePointsEarned != null ? yen(item.purchasePointsEarned) : "—";
+      var salePriceCell, saleQtyCell, feeCell, shippingCell;
       var cashCell, cashCls, totalCell, totalCls, cashMarginCell, totalMarginCell;
 
       if (isRealized) {
@@ -1175,7 +1179,6 @@
         saleQtyCell = item.salePrice != null ? (Number(item.saleQuantity) || 1) : "—";
         feeCell = item.salePrice != null ? yen(item.fee) : "—";
         shippingCell = item.salePrice != null ? yen(item.shipping) : "—";
-        pointsCell = item.salePrice != null ? yen(item.points) : "—";
         cashCell = cashProfit === null ? "—" : yen(cashProfit);
         cashCls = cashProfit === null ? "" : (cashProfit >= 0 ? "profit-cell profit" : "profit-cell loss");
         totalCell = totalProfit === null ? "—" : yen(totalProfit);
@@ -1193,7 +1196,6 @@
         saleQtyCell = Number(item.saleQuantity) || 1;
         feeCell = hasPlanned ? yen(plannedFee(item)) : "—";
         shippingCell = hasPlanned ? yen(item.plannedShipping) : "—";
-        pointsCell = "—";
         cashCell = expCash === null ? "—" : yen(expCash);
         cashCls = "";
         totalCell = expTotal === null ? "—" : yen(expTotal);
@@ -1214,11 +1216,11 @@
         "<td>" + escapeHtml(item.platform || "—") + "</td>" +
         "<td>" + statusBadges + "</td>" +
         '<td class="num">' + yen(item.purchasePrice) + "</td>" +
+        '<td class="num">' + purchasePointsEarnedCell + "</td>" +
         '<td class="num">' + salePriceCell + "</td>" +
         '<td class="num">' + saleQtyCell + "</td>" +
         '<td class="num">' + feeCell + "</td>" +
         '<td class="num">' + shippingCell + "</td>" +
-        '<td class="num">' + pointsCell + "</td>" +
         '<td class="num ' + cashCls + '">' + cashCell + "</td>" +
         '<td class="num ' + cashCls + '">' + cashMarginCell + "</td>" +
         '<td class="num ' + totalCls + '">' + totalCell + "</td>" +
@@ -1462,9 +1464,9 @@
 
   // Fields that feed the live 損益分岐価格/想定ROI/実績ROI readouts in the item modal.
   var ITEM_CALC_FIELD_IDS = [
-    "f_purchasePrice", "f_purchaseShipping", "f_purchasePointsUsed", "f_purchaseNetCost",
+    "f_purchasePrice", "f_purchaseShipping", "f_purchasePointsUsed", "f_purchasePointsEarned",
     "f_saleQuantity", "f_plannedSalePrice", "f_feeRate", "f_plannedShipping", "f_otherFee",
-    "f_saleDate", "f_listingStartDate", "f_salePrice", "f_depositAmount", "f_fee", "f_shipping", "f_points"
+    "f_saleDate", "f_listingStartDate", "f_salePrice", "f_depositAmount", "f_fee", "f_shipping"
   ];
 
   function numVal(id) {
@@ -1475,12 +1477,16 @@
   // Builds an item-shaped draft straight from the current form inputs, so the same
   // profit/ROI helpers used elsewhere in the app can preview figures before saving.
   function readItemFormAsDraft() {
+    // Carries the currently-edited item's legacy purchaseNetCost forward so the live
+    // preview still falls back correctly for items saved before 獲得ポイント existed.
+    var existingItem = state.editingId ? state.items.find(function (i) { return i.id === state.editingId; }) : null;
     return {
       status: document.getElementById("f_status").value,
       purchasePrice: numVal("f_purchasePrice"),
       purchaseShipping: numVal("f_purchaseShipping"),
       purchasePointsUsed: numVal("f_purchasePointsUsed"),
-      purchaseNetCost: document.getElementById("f_purchaseNetCost").value === "" ? null : numVal("f_purchaseNetCost"),
+      purchasePointsEarned: document.getElementById("f_purchasePointsEarned").value === "" ? null : numVal("f_purchasePointsEarned"),
+      purchaseNetCost: existingItem ? existingItem.purchaseNetCost : null,
       saleQuantity: Number(document.getElementById("f_saleQuantity").value) || 1,
       plannedSalePrice: numVal("f_plannedSalePrice"),
       feeRate: numVal("f_feeRate"),
@@ -1491,8 +1497,7 @@
       salePrice: document.getElementById("f_salePrice").value === "" ? null : numVal("f_salePrice"),
       depositAmount: document.getElementById("f_depositAmount").value === "" ? null : numVal("f_depositAmount"),
       fee: numVal("f_fee"),
-      shipping: numVal("f_shipping"),
-      points: numVal("f_points")
+      shipping: numVal("f_shipping")
     };
   }
 
@@ -1516,6 +1521,7 @@
 
   function updateItemModalComputed() {
     var draft = readItemFormAsDraft();
+    document.getElementById("f_purchaseNetCost").value = yen(netPurchaseCost(draft));
     document.getElementById("f_plannedCalc").innerHTML =
       calcLine("現金のみ", "cash", draft) + "<br>" + calcLine("現金+P還元", "total", draft);
     var days = daysListed(draft);
@@ -1563,7 +1569,7 @@
     document.getElementById("f_quantity").value = "1";
     document.getElementById("f_quantity_wrap").style.display = item ? "none" : "";
     document.getElementById("f_purchasePointsUsed").value = item && item.purchasePointsUsed != null ? item.purchasePointsUsed : "";
-    document.getElementById("f_purchaseNetCost").value = item && item.purchaseNetCost != null ? item.purchaseNetCost : "";
+    document.getElementById("f_purchasePointsEarned").value = item && item.purchasePointsEarned != null ? item.purchasePointsEarned : "";
     document.getElementById("f_plannedPlatform").value = item ? (item.plannedPlatform || item.platform) : state.platforms[0];
     document.getElementById("f_plannedSalePrice").value = item && item.plannedSalePrice != null ? item.plannedSalePrice : "";
     document.getElementById("f_feeRate").value = item && item.feeRate != null ? item.feeRate : "";
@@ -1576,7 +1582,6 @@
     document.getElementById("f_saleQuantity").value = item && item.saleQuantity ? item.saleQuantity : 1;
     document.getElementById("f_fee").value = item && item.fee != null ? item.fee : "";
     document.getElementById("f_shipping").value = item && item.shipping != null ? item.shipping : "";
-    document.getElementById("f_points").value = item && item.points != null ? item.points : "";
     document.getElementById("f_sku").value = item ? item.sku || "" : "";
     document.getElementById("f_disposed").checked = !!(item && item.disposed);
     document.getElementById("f_memo").value = item ? item.memo || "" : "";
@@ -1601,6 +1606,10 @@
       alert("商品名を入力してください。");
       return;
     }
+    // Preserve the legacy purchaseNetCost of the item being edited (if any) — the field
+    // is no longer directly editable (it's now an auto-computed readonly display), so a
+    // save must not silently drop the fallback value old records relied on.
+    var editingExisting = state.editingId ? state.items.find(function (i) { return i.id === state.editingId; }) : null;
     var payload = {
       name: name,
       supplier: document.getElementById("f_supplier").value.trim(),
@@ -1613,7 +1622,8 @@
       purchasePrice: Number(document.getElementById("f_purchasePrice").value) || 0,
       purchaseShipping: document.getElementById("f_purchaseShipping").value === "" ? 0 : Number(document.getElementById("f_purchaseShipping").value),
       purchasePointsUsed: document.getElementById("f_purchasePointsUsed").value === "" ? 0 : Number(document.getElementById("f_purchasePointsUsed").value),
-      purchaseNetCost: document.getElementById("f_purchaseNetCost").value === "" ? null : Number(document.getElementById("f_purchaseNetCost").value),
+      purchasePointsEarned: document.getElementById("f_purchasePointsEarned").value === "" ? null : Number(document.getElementById("f_purchasePointsEarned").value),
+      purchaseNetCost: editingExisting ? editingExisting.purchaseNetCost : null,
       plannedPlatform: document.getElementById("f_plannedPlatform").value,
       plannedSalePrice: document.getElementById("f_plannedSalePrice").value === "" ? null : Number(document.getElementById("f_plannedSalePrice").value),
       feeRate: document.getElementById("f_feeRate").value === "" ? 0 : Number(document.getElementById("f_feeRate").value),
@@ -1626,7 +1636,6 @@
       saleQuantity: Math.max(1, parseInt(document.getElementById("f_saleQuantity").value, 10) || 1),
       fee: document.getElementById("f_fee").value === "" ? 0 : Number(document.getElementById("f_fee").value),
       shipping: document.getElementById("f_shipping").value === "" ? 0 : Number(document.getElementById("f_shipping").value),
-      points: document.getElementById("f_points").value === "" ? 0 : Number(document.getElementById("f_points").value),
       sku: document.getElementById("f_sku").value.trim(),
       disposed: document.getElementById("f_disposed").checked,
       memo: document.getElementById("f_memo").value.trim()
@@ -1689,9 +1698,9 @@
   // ---------- CSV template / import ----------
   var CSV_HEADERS = [
     "商品名", "店名", "プラットフォーム", "ステータス", "商品種別", "ASIN", "検品",
-    "仕入日", "仕入額", "仕入送料", "仕入Pt払い額", "実質仕入額",
+    "仕入日", "仕入額", "仕入送料", "仕入Pt払い額", "獲得ポイント", "実質仕入額",
     "想定販路", "想定販売価格", "手数料率", "想定送料", "その他手数料",
-    "販売日", "売上日", "販売額", "入金額", "販売数", "手数料", "送料", "獲得ポイント", "SKU", "処分",
+    "販売日", "売上日", "販売額", "入金額", "販売数", "手数料", "送料", "SKU", "処分",
     "メモ"
   ];
   var STATUS_FROM_LABEL = { "在庫": "stock", "販売中": "listed", "出品中": "listed", "売却済み": "sold" };
@@ -1724,19 +1733,19 @@
   function buildTemplateCsv() {
     var exampleRows = [
       ["Nintendo Switch 本体", "ハードオフ〇〇店", "メルカリ", "売却済み", "中古", "", "TRUE",
-        "2026-06-01", "15000", "0", "0", "15000",
+        "2026-06-01", "15000", "0", "0", "0", "15000",
         "メルカリ", "22000", "10", "700", "0",
-        "2026-06-03", "2026-06-10", "22000", "22000", "1", "2200", "700", "0", "", "FALSE",
+        "2026-06-03", "2026-06-10", "22000", "22000", "1", "2200", "700", "", "FALSE",
         "動作確認済み"],
       ["未使用ゲームソフト", "コジマ", "Amazon", "売却済み", "新品", "B0XXXXXXXX", "TRUE",
-        "2026-06-20", "800", "0", "0", "702",
+        "2026-06-20", "800", "0", "0", "98", "702",
         "Amazon", "1800", "15", "0", "0",
-        "2026-06-22", "2026-06-25", "1800", "1800", "1", "270", "0", "0", "20260620P702PG100", "FALSE",
+        "2026-06-22", "2026-06-25", "1800", "1800", "1", "270", "0", "20260620P702PG100", "FALSE",
         ""],
       ["未使用ゲームソフト2", "ブックオフ〇〇店", "Amazon", "在庫", "新品", "", "FALSE",
-        "2026-07-01", "800", "0", "0", "800",
+        "2026-07-01", "800", "0", "0", "0", "800",
         "Amazon", "1500", "15", "0", "0",
-        "", "", "", "", "", "", "", "", "", "FALSE",
+        "", "", "", "", "", "", "", "", "FALSE",
         ""]
     ];
     var rows = [CSV_HEADERS].concat(exampleRows);
@@ -1827,9 +1836,9 @@
     purchasePrice: ["仕入額", "仕入れ額", "仕入値", "仕入れ値", "原価", "購入金額", "仕入価格"],
     purchaseShipping: ["仕入送料"],
     // "Pt払い額" (bare, no "仕入" prefix) is the literal header text used by the source
-    // spreadsheet's purchase-side column — it must resolve here, not to the sale-side
-    // "points" field below, or the amount silently lands in the wrong field.
+    // spreadsheet's purchase-side column.
     purchasePointsUsed: ["仕入Pt払い額", "仕入Pt払い額（円）", "Pt払い額(仕入)", "Pt払い額"],
+    purchasePointsEarned: ["獲得ポイント", "仕入獲得ポイント", "獲得ポイント(仕入)"],
     purchaseNetCost: ["実質仕入額"],
     plannedPlatform: ["想定販路"],
     plannedSalePrice: ["想定販売価格"],
@@ -1845,8 +1854,6 @@
     saleQuantity: ["販売数", "販売個数", "売却数", "数量"],
     fee: ["想定手数料", "手数料", "販売手数料", "Amazon手数料"],
     shipping: ["送料", "発送料", "配送料", "自己払い送料", "自己負担送料"],
-    // "Pt払い額" intentionally excluded here — see purchasePointsUsed above.
-    points: ["P払い額", "獲得ポイント", "ポイント", "楽天ポイント"],
     sku: ["SKU", "SKU(参考)", "SKU（参考）"],
     disposed: ["処分"],
     memo: ["メモ", "詳細", "備考", "詳細/MEMO", "詳細 / MEMO", "メモ/詳細"]
@@ -2003,6 +2010,7 @@
         var purchasePriceRaw = field(r, "purchasePrice").trim();
         var purchaseShippingRaw = field(r, "purchaseShipping").trim();
         var purchasePointsUsedRaw = field(r, "purchasePointsUsed").trim();
+        var purchasePointsEarnedRaw = field(r, "purchasePointsEarned").trim();
         var purchaseNetCostRaw = field(r, "purchaseNetCost").trim();
         var plannedPlatformRaw = field(r, "plannedPlatform").trim();
         var plannedSalePriceRaw = field(r, "plannedSalePrice").trim();
@@ -2016,7 +2024,6 @@
         var saleQuantityRaw = field(r, "saleQuantity").trim();
         var feeRaw = field(r, "fee").trim();
         var shippingRaw = field(r, "shipping").trim();
-        var pointsRaw = field(r, "points").trim();
         var skuRaw = field(r, "sku").trim();
         var disposedRaw = field(r, "disposed").trim();
         var memoRaw = field(r, "memo").trim();
@@ -2033,7 +2040,6 @@
         var saleQuantity = Math.max(1, parseInt(saleQuantityRaw, 10) || 1);
         var fee = parseNumberLoose(feeRaw);
         var shipping = parseNumberLoose(shippingRaw);
-        var points = parseNumberLoose(pointsRaw);
         var memo = memoRaw;
 
         var recognizedStatus = inferStatusFromLabel(statusLabel);
@@ -2086,6 +2092,7 @@
             purchasePrice: purchasePriceRaw !== "" ? purchasePrice : existing.purchasePrice,
             purchaseShipping: purchaseShippingRaw !== "" ? parseNumberLoose(purchaseShippingRaw) : existing.purchaseShipping,
             purchasePointsUsed: purchasePointsUsedRaw !== "" ? parseNumberLoose(purchasePointsUsedRaw) : existing.purchasePointsUsed,
+            purchasePointsEarned: purchasePointsEarnedRaw !== "" ? parseNumberLoose(purchasePointsEarnedRaw) : existing.purchasePointsEarned,
             purchaseNetCost: purchaseNetCostRaw !== "" ? parseNumberLoose(purchaseNetCostRaw) : existing.purchaseNetCost,
             plannedPlatform: plannedPlatformRaw !== "" ? plannedPlatformRaw : existing.plannedPlatform,
             plannedSalePrice: plannedSalePriceRaw !== "" ? parseNumberLoose(plannedSalePriceRaw) : existing.plannedSalePrice,
@@ -2099,7 +2106,6 @@
             saleQuantity: saleQuantityRaw !== "" ? saleQuantity : existing.saleQuantity,
             fee: feeRaw !== "" ? fee : existing.fee,
             shipping: shippingRaw !== "" ? shipping : existing.shipping,
-            points: pointsRaw !== "" ? points : existing.points,
             sku: skuRaw !== "" ? skuRaw : existing.sku,
             disposed: disposedRaw !== "" ? parseBooleanLoose(disposedRaw) : existing.disposed,
             memo: memoRaw !== "" ? memo : existing.memo
@@ -2120,6 +2126,7 @@
             purchasePrice: purchasePrice,
             purchaseShipping: parseNumberLoose(purchaseShippingRaw),
             purchasePointsUsed: parseNumberLoose(purchasePointsUsedRaw),
+            purchasePointsEarned: purchasePointsEarnedRaw !== "" ? parseNumberLoose(purchasePointsEarnedRaw) : null,
             purchaseNetCost: purchaseNetCostRaw !== "" ? parseNumberLoose(purchaseNetCostRaw) : null,
             plannedPlatform: plannedPlatformRaw || platform,
             plannedSalePrice: plannedSalePriceRaw !== "" ? parseNumberLoose(plannedSalePriceRaw) : null,
@@ -2133,7 +2140,6 @@
             saleQuantity: saleQuantity,
             fee: fee,
             shipping: shipping,
-            points: points,
             sku: skuRaw,
             disposed: parseBooleanLoose(disposedRaw),
             memo: memo
