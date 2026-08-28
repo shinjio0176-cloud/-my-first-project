@@ -945,10 +945,21 @@
     });
   });
 
+  // 想定販路（計画）は実際の販売プラットフォーム一覧とは別に、手数料率の自動計算に
+  // 使う固定の選択肢にする。Amazonの%は各成約手数料区分。手数料額（販売価格×区分%）
+  // に消費税10%が上乗せされるため、実効手数料率は区分%×1.1（加算ではなく乗算）になる。
+  var PLANNED_PLATFORM_OPTIONS = ["Amazon8.4%", "Amazon10.4%", "Amazon15.4%", "Amazonその他", "メルカリ"];
+  var PLANNED_PLATFORM_FEE_RATE = {
+    "Amazon8.4%": Math.round(8.4 * 1.1 * 100) / 100,
+    "Amazon10.4%": Math.round(10.4 * 1.1 * 100) / 100,
+    "Amazon15.4%": Math.round(15.4 * 1.1 * 100) / 100,
+    "メルカリ": 10
+    // "Amazonその他" は手数料率が一定でないため自動入力しない。
+  };
+
   // ---------- platform select population ----------
   function populatePlatformSelects() {
     var formSel = document.getElementById("f_platform");
-    var plannedSel = document.getElementById("f_plannedPlatform");
     var filterSel = document.getElementById("filterPlatform");
     var prevFilter = filterSel.value;
 
@@ -956,10 +967,13 @@
       return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>";
     }).join("");
     formSel.innerHTML = options;
-    plannedSel.innerHTML = options;
 
     filterSel.innerHTML = '<option value="">全プラットフォーム</option>' + options;
     filterSel.value = prevFilter;
+
+    document.getElementById("f_plannedPlatform").innerHTML = PLANNED_PLATFORM_OPTIONS.map(function (p) {
+      return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>";
+    }).join("");
   }
 
   // ---------- dashboard ----------
@@ -1534,6 +1548,16 @@
     document.getElementById(id).addEventListener("input", updateItemModalComputed);
   });
 
+  // 想定販路を選ぶと手数料率を自動入力する（Amazonの各区分は消費税10%を加算した率、
+  // メルカリは固定10%）。「Amazonその他」は手数料率が一定でないため変更しない。
+  document.getElementById("f_plannedPlatform").addEventListener("change", function () {
+    var rate = PLANNED_PLATFORM_FEE_RATE[this.value];
+    if (rate !== undefined) {
+      document.getElementById("f_feeRate").value = rate;
+      updateItemModalComputed();
+    }
+  });
+
   // 日付を入力するとステータスを自動的に進める（在庫→販売中→売却済み）。
   // 逆方向（日付を消したらステータスを戻す）は、意図しない格下げを避けるため行わない。
   document.getElementById("f_listingStartDate").addEventListener("change", function () {
@@ -1570,7 +1594,10 @@
     document.getElementById("f_quantity_wrap").style.display = item ? "none" : "";
     document.getElementById("f_purchasePointsUsed").value = item && item.purchasePointsUsed != null ? item.purchasePointsUsed : "";
     document.getElementById("f_purchasePointsEarned").value = item && item.purchasePointsEarned != null ? item.purchasePointsEarned : "";
-    document.getElementById("f_plannedPlatform").value = item ? (item.plannedPlatform || item.platform) : state.platforms[0];
+    var plannedPlatformValue = item && item.plannedPlatform && PLANNED_PLATFORM_OPTIONS.indexOf(item.plannedPlatform) !== -1
+      ? item.plannedPlatform
+      : PLANNED_PLATFORM_OPTIONS[0];
+    document.getElementById("f_plannedPlatform").value = plannedPlatformValue;
     document.getElementById("f_plannedSalePrice").value = item && item.plannedSalePrice != null ? item.plannedSalePrice : "";
     document.getElementById("f_feeRate").value = item && item.feeRate != null ? item.feeRate : "";
     document.getElementById("f_plannedShipping").value = item && item.plannedShipping != null ? item.plannedShipping : "";
