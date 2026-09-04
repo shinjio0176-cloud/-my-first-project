@@ -360,6 +360,12 @@
         <option value="">全プラットフォーム</option>
       </select>
       <input type="text" id="filterSearch" placeholder="商品名・店名・ASIN・SKUで検索">
+      <select id="filterSortOrder">
+        <option value="registered_desc">登録順（新しい順）</option>
+        <option value="registered_asc">登録順（古い順）</option>
+        <option value="listingDate_desc">販売日（新しい順）</option>
+        <option value="listingDate_asc">販売日（古い順）</option>
+      </select>
       <div class="spacer"></div>
       <button class="btn secondary" id="btnBulkEditSelectedItems" disabled>選択した商品を一括編集</button>
       <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
@@ -1262,10 +1268,20 @@
   }
 
   // ---------- items view ----------
+  // 商品を追加した順（state.items の配列順。新規登録は push で末尾に追加、編集は
+  // 同じ位置を保持するため、配列の並びがそのまま登録順になる）。
+  function compareByDate(aVal, bVal, dir) {
+    if (!aVal && !bVal) return 0;
+    if (!aVal) return 1;
+    if (!bVal) return -1;
+    return dir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+  }
+
   function renderItemsView() {
     var statusFilter = document.getElementById("filterStatus").value;
     var platformFilter = document.getElementById("filterPlatform").value;
     var search = document.getElementById("filterSearch").value.trim().toLowerCase();
+    var sortOrder = document.getElementById("filterSortOrder").value;
 
     var filtered = state.items.filter(function (item) {
       if (statusFilter && item.status !== statusFilter) return false;
@@ -1277,11 +1293,15 @@
       return true;
     });
 
-    filtered.sort(function (a, b) {
-      var da = a.purchaseDate || "";
-      var db = b.purchaseDate || "";
-      return db.localeCompare(da);
-    });
+    if (sortOrder === "registered_desc") {
+      filtered.reverse();
+    } else if (sortOrder === "listingDate_asc") {
+      filtered.sort(function (a, b) { return compareByDate(a.listingStartDate, b.listingStartDate, "asc"); });
+    } else if (sortOrder === "listingDate_desc") {
+      filtered.sort(function (a, b) { return compareByDate(a.listingStartDate, b.listingStartDate, "desc"); });
+    }
+    // registered_asc: state.items は登録順（古い順）で保持されているため、
+    // filter() で順序を保ったままの filtered をそのまま使う（追加のsort不要）。
 
     var tbody = document.querySelector("#itemsTable tbody");
     var emptyState = document.getElementById("itemsEmpty");
@@ -1473,6 +1493,7 @@
   document.getElementById("filterStatus").addEventListener("change", renderItemsView);
   document.getElementById("filterPlatform").addEventListener("change", renderItemsView);
   document.getElementById("filterSearch").addEventListener("input", renderItemsView);
+  document.getElementById("filterSortOrder").addEventListener("change", renderItemsView);
 
   // ---------- expenses view ----------
   function renderExpensesView() {
