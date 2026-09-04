@@ -373,6 +373,7 @@
               <th>商品名</th>
               <th>店名</th>
               <th>プラットフォーム</th>
+              <th>販売種別</th>
               <th>ステータス</th>
               <th class="num">仕入額</th>
               <th class="num">獲得ポイント</th>
@@ -1270,6 +1271,7 @@
         "<td>" + escapeHtml(item.name) + "</td>" +
         "<td>" + escapeHtml(item.supplier || "—") + "</td>" +
         "<td>" + escapeHtml(item.platform || "—") + "</td>" +
+        "<td>" + escapeHtml(item.plannedCondition || "—") + "</td>" +
         "<td>" + statusBadges + "</td>" +
         '<td class="num">' + yen(item.purchasePrice) + "</td>" +
         '<td class="num">' + purchasePointsEarnedCell + "</td>" +
