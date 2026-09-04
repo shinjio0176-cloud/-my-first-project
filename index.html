@@ -361,6 +361,7 @@
       </select>
       <input type="text" id="filterSearch" placeholder="商品名・店名・ASIN・SKUで検索">
       <div class="spacer"></div>
+      <button class="btn secondary" id="btnBulkEditSelectedItems" disabled>選択した商品を一括編集</button>
       <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
       <button class="btn" id="btnNewItem2">＋ 新規登録</button>
     </div>
@@ -687,6 +688,75 @@
   </div>
 </div>
 
+<!-- Bulk edit modal -->
+<div class="modal-backdrop" id="bulkEditModalBackdrop">
+  <div class="modal">
+    <h3 id="bulkEditModalTitle">選択した商品を一括編集</h3>
+    <p class="note">変更したい項目だけ「変更しない」以外を選んでください。「変更しない」のままの項目は元の値が保たれます。</p>
+    <div class="form-grid">
+      <div class="field">
+        <label>ステータス</label>
+        <select id="bulk_status">
+          <option value="">変更しない</option>
+          <option value="stock">在庫</option>
+          <option value="listed">販売中</option>
+          <option value="sold">売却済み</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>プラットフォーム</label>
+        <select id="bulk_platform">
+          <option value="">変更しない</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>商品種別</label>
+        <select id="bulk_productType">
+          <option value="">変更しない</option>
+          <option value="新品">新品</option>
+          <option value="在庫処分品">在庫処分品</option>
+          <option value="中古品">中古品</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>想定販路</label>
+        <select id="bulk_plannedPlatform">
+          <option value="">変更しない</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>販売種別</label>
+        <select id="bulk_plannedCondition">
+          <option value="">変更しない</option>
+          <option value="新品">新品</option>
+          <option value="ほぼ新品">ほぼ新品</option>
+          <option value="中古品">中古品</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>検品済み</label>
+        <select id="bulk_inspected">
+          <option value="">変更しない</option>
+          <option value="true">チェックする</option>
+          <option value="false">チェックを外す</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>処分</label>
+        <select id="bulk_disposed">
+          <option value="">変更しない</option>
+          <option value="true">処分にする</option>
+          <option value="false">処分を解除する</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="btnBulkEditCancel">キャンセル</button>
+      <button class="btn" id="btnBulkEditSave">選択した商品に適用</button>
+    </div>
+  </div>
+</div>
+
 <!-- Expense modal -->
 <div class="modal-backdrop" id="expenseModalBackdrop">
   <div class="modal">
@@ -1000,6 +1070,13 @@
     document.getElementById("f_plannedPlatform").innerHTML = PLANNED_PLATFORM_OPTIONS.map(function (p) {
       return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>";
     }).join("");
+
+    var bulkPlatformSel = document.getElementById("bulk_platform");
+    bulkPlatformSel.innerHTML = '<option value="">変更しない</option>' + options;
+
+    document.getElementById("bulk_plannedPlatform").innerHTML = '<option value="">変更しない</option>' + PLANNED_PLATFORM_OPTIONS.map(function (p) {
+      return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>";
+    }).join("");
   }
 
   // ---------- dashboard ----------
@@ -1007,17 +1084,12 @@
     return list.reduce(function (s, e) { return s + (Number(e.amount) || 0); }, 0);
   }
 
-  // キャッシュフロー = その期間に売れた商品の入金額 − その期間に仕入れた商品の
-  // 現金支出額（Pt払い後）。売れたかどうかに関わらず、その期間に実際に仕入れで
-  // 出ていった現金を差し引く点が、売れた商品の原価だけを見る純利益とは異なる。
-  function cashFlowOf(activeItems, soldItems, periodKey, keyFn) {
-    var inflow = soldItems
+  // キャッシュフロー = 販売した商品の実際の現金の動き（入金額 − 現金仕入額 − 自己負担送料）。
+  // ポイント還元分は含めない現金ベースの実績値なので profitOf と同じ計算式を使う。
+  function cashFlowOf(soldItems, periodKey, keyFn) {
+    return soldItems
       .filter(function (i) { return keyFn(i.saleDate) === periodKey; })
-      .reduce(function (s, i) { return s + (i.depositAmount != null ? Number(i.depositAmount) : (Number(i.salePrice) || 0)); }, 0);
-    var outflow = activeItems
-      .filter(function (i) { return keyFn(i.purchaseDate) === periodKey; })
-      .reduce(function (s, i) { return s + cashPaidAfterPurchasePoints(i); }, 0);
-    return inflow - outflow;
+      .reduce(function (s, i) { return s + (profitOf(i) || 0); }, 0);
   }
 
   function renderDashboard() {
@@ -1032,7 +1104,7 @@
     var monthNetIncomeCash = monthSold.reduce(function (s, i) { return s + netIncomeCashProfitOf(i); }, 0);
     var monthNetIncomeTotal = monthSold.reduce(function (s, i) { return s + netIncomeTotalProfitOf(i); }, 0);
     var monthExpenses = expenseSum(state.expenses.filter(function (e) { return monthKey(e.date) === curMonthKey; }));
-    var monthCashFlow = cashFlowOf(activeItems, soldItems, curMonthKey, monthKey);
+    var monthCashFlow = cashFlowOf(soldItems, curMonthKey, monthKey);
 
     var stockItems = activeItems.filter(function (i) { return i.status === "stock" || i.status === "listed"; });
     var stockValue = stockItems.reduce(function (s, i) { return s + itemCost(i); }, 0);
@@ -1042,7 +1114,7 @@
     var totalNetIncomeCash = soldItems.reduce(function (s, i) { return s + netIncomeCashProfitOf(i); }, 0);
     var totalNetIncomeTotal = soldItems.reduce(function (s, i) { return s + netIncomeTotalProfitOf(i); }, 0);
     var totalExpenses = expenseSum(state.expenses);
-    var totalCashFlow = cashFlowOf(activeItems, soldItems, null, function () { return null; });
+    var totalCashFlow = cashFlowOf(soldItems, null, function () { return null; });
 
     var netMonthCash = monthNetIncomeCash - monthExpenses;
     var netMonthTotal = monthNetIncomeTotal - monthExpenses;
@@ -1314,6 +1386,10 @@
     var btn = document.getElementById("btnDeleteSelectedItems");
     btn.disabled = checked.length === 0;
     btn.textContent = checked.length ? "選択した商品を削除（" + checked.length + "件）" : "選択した商品を削除";
+
+    var bulkEditBtn = document.getElementById("btnBulkEditSelectedItems");
+    bulkEditBtn.disabled = checked.length === 0;
+    bulkEditBtn.textContent = checked.length ? "選択した商品を一括編集（" + checked.length + "件）" : "選択した商品を一括編集";
   }
 
   document.getElementById("itemsSelectAll").addEventListener("change", function () {
@@ -1330,6 +1406,66 @@
     if (!confirm(ids.length + "件の商品データを削除します。よろしいですか？")) return;
     state.items = state.items.filter(function (i) { return ids.indexOf(i.id) === -1; });
     save();
+    renderItemsView();
+    renderDashboard();
+  });
+
+  // ---------- bulk edit ----------
+  var bulkEditIds = [];
+
+  function openBulkEditModal(ids) {
+    bulkEditIds = ids;
+    document.getElementById("bulkEditModalTitle").textContent = "選択した商品を一括編集（" + ids.length + "件）";
+    ["bulk_status", "bulk_platform", "bulk_productType", "bulk_plannedPlatform", "bulk_plannedCondition", "bulk_inspected", "bulk_disposed"].forEach(function (id) {
+      document.getElementById(id).value = "";
+    });
+    document.getElementById("bulkEditModalBackdrop").classList.add("active");
+  }
+
+  function closeBulkEditModal() {
+    document.getElementById("bulkEditModalBackdrop").classList.remove("active");
+    bulkEditIds = [];
+  }
+
+  document.getElementById("btnBulkEditSelectedItems").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#itemsTable tbody .item-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    if (!ids.length) return;
+    openBulkEditModal(ids);
+  });
+
+  document.getElementById("btnBulkEditCancel").addEventListener("click", closeBulkEditModal);
+
+  document.getElementById("btnBulkEditSave").addEventListener("click", function () {
+    if (!bulkEditIds.length) return;
+
+    var statusVal = document.getElementById("bulk_status").value;
+    var platformVal = document.getElementById("bulk_platform").value;
+    var productTypeVal = document.getElementById("bulk_productType").value;
+    var plannedPlatformVal = document.getElementById("bulk_plannedPlatform").value;
+    var plannedConditionVal = document.getElementById("bulk_plannedCondition").value;
+    var inspectedVal = document.getElementById("bulk_inspected").value;
+    var disposedVal = document.getElementById("bulk_disposed").value;
+
+    if (!statusVal && !platformVal && !productTypeVal && !plannedPlatformVal && !plannedConditionVal && !inspectedVal && !disposedVal) {
+      alert("変更する項目を1つ以上選んでください。");
+      return;
+    }
+
+    if (!confirm(bulkEditIds.length + "件の商品に変更を適用します。よろしいですか？")) return;
+
+    state.items.forEach(function (item) {
+      if (bulkEditIds.indexOf(item.id) === -1) return;
+      if (statusVal) item.status = statusVal;
+      if (platformVal) item.platform = platformVal;
+      if (productTypeVal) item.productType = productTypeVal;
+      if (plannedPlatformVal) item.plannedPlatform = plannedPlatformVal;
+      if (plannedConditionVal) item.plannedCondition = plannedConditionVal;
+      if (inspectedVal) item.inspected = inspectedVal === "true";
+      if (disposedVal) item.disposed = disposedVal === "true";
+    });
+
+    save();
+    closeBulkEditModal();
     renderItemsView();
     renderDashboard();
   });
