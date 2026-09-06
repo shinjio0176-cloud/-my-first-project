@@ -367,6 +367,7 @@
         <option value="listingDate_asc">販売日（古い順）</option>
       </select>
       <div class="spacer"></div>
+      <button class="btn secondary" id="btnCopySelectedItems" disabled>選択した商品をコピー</button>
       <button class="btn secondary" id="btnBulkEditSelectedItems" disabled>選択した商品を一括編集</button>
       <button class="btn danger" id="btnDeleteSelectedItems" disabled>選択した商品を削除</button>
       <button class="btn" id="btnNewItem2">＋ 新規登録</button>
@@ -435,6 +436,7 @@
 
     <div class="toolbar">
       <div class="spacer"></div>
+      <button class="btn secondary" id="btnCopySelectedExpenses" disabled>選択した費用をコピー</button>
       <button class="btn danger" id="btnDeleteSelectedExpenses" disabled>選択した費用を削除</button>
       <button class="btn" id="btnNewExpense">＋ 費用を登録</button>
     </div>
@@ -463,6 +465,7 @@
       <h2 style="padding:16px 16px 0;">変動費</h2>
       <div class="toolbar" style="padding:0 16px;">
         <div class="spacer"></div>
+        <button class="btn secondary" id="btnCopySelectedVariable" disabled>選択した変動費をコピー</button>
         <button class="btn danger" id="btnDeleteSelectedVariable" disabled>選択した変動費を削除</button>
         <button class="btn secondary" id="btnNewExpenseVariable">＋ 変動費を登録</button>
       </div>
@@ -1398,6 +1401,10 @@
     var bulkEditBtn = document.getElementById("btnBulkEditSelectedItems");
     bulkEditBtn.disabled = checked.length === 0;
     bulkEditBtn.textContent = checked.length ? "選択した商品を一括編集（" + checked.length + "件）" : "選択した商品を一括編集";
+
+    var copyBtn = document.getElementById("btnCopySelectedItems");
+    copyBtn.disabled = checked.length === 0;
+    copyBtn.textContent = checked.length ? "選択した商品をコピー（" + checked.length + "件）" : "選択した商品をコピー";
   }
 
   document.getElementById("itemsSelectAll").addEventListener("change", function () {
@@ -1413,6 +1420,19 @@
     if (!ids.length) return;
     if (!confirm(ids.length + "件の商品データを削除します。よろしいですか？")) return;
     state.items = state.items.filter(function (i) { return ids.indexOf(i.id) === -1; });
+    save();
+    renderItemsView();
+    renderDashboard();
+  });
+
+  document.getElementById("btnCopySelectedItems").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#itemsTable tbody .item-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    if (!ids.length) return;
+    if (!confirm(ids.length + "件の商品をコピーします。よろしいですか？")) return;
+    var toCopy = state.items.filter(function (i) { return ids.indexOf(i.id) !== -1; });
+    toCopy.forEach(function (item) {
+      state.items.push(Object.assign({}, item, { id: uid(), name: (item.name || "") + "（コピー）" }));
+    });
     save();
     renderItemsView();
     renderDashboard();
@@ -1561,10 +1581,18 @@
     btn.disabled = checked.length === 0;
     btn.textContent = checked.length ? "選択した費用を削除（" + checked.length + "件）" : "選択した費用を削除";
 
+    var copyBtn = document.getElementById("btnCopySelectedExpenses");
+    copyBtn.disabled = checked.length === 0;
+    copyBtn.textContent = checked.length ? "選択した費用をコピー（" + checked.length + "件）" : "選択した費用をコピー";
+
     var varChecked = document.querySelectorAll("#variableExpenseTable .expense-row-select:checked");
     var varBtn = document.getElementById("btnDeleteSelectedVariable");
     varBtn.disabled = varChecked.length === 0;
     varBtn.textContent = varChecked.length ? "選択した変動費を削除（" + varChecked.length + "件）" : "選択した変動費を削除";
+
+    var varCopyBtn = document.getElementById("btnCopySelectedVariable");
+    varCopyBtn.disabled = varChecked.length === 0;
+    varCopyBtn.textContent = varChecked.length ? "選択した変動費をコピー（" + varChecked.length + "件）" : "選択した変動費をコピー";
   }
 
   document.querySelectorAll(".expense-select-all").forEach(function (selectAllCb) {
@@ -1595,6 +1623,28 @@
     saveExpenses();
     renderExpensesView();
     renderDashboard();
+  });
+
+  function copySelectedExpenses(ids) {
+    if (!ids.length) return;
+    if (!confirm(ids.length + "件の費用をコピーします。よろしいですか？")) return;
+    var toCopy = state.expenses.filter(function (e) { return ids.indexOf(e.id) !== -1; });
+    toCopy.forEach(function (ex) {
+      state.expenses.push(Object.assign({}, ex, { id: uid() }));
+    });
+    saveExpenses();
+    renderExpensesView();
+    renderDashboard();
+  }
+
+  document.getElementById("btnCopySelectedExpenses").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#view-expenses .expense-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    copySelectedExpenses(ids);
+  });
+
+  document.getElementById("btnCopySelectedVariable").addEventListener("click", function () {
+    var ids = Array.from(document.querySelectorAll("#variableExpenseTable .expense-row-select:checked")).map(function (cb) { return cb.dataset.id; });
+    copySelectedExpenses(ids);
   });
 
   // ---------- expense modal ----------
