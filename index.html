@@ -557,14 +557,6 @@
         <select id="f_platform"></select>
       </div>
       <div class="field">
-        <label>ステータス</label>
-        <select id="f_status">
-          <option value="stock">在庫</option>
-          <option value="listed">販売中</option>
-          <option value="sold">売却済み</option>
-        </select>
-      </div>
-      <div class="field">
         <label>ASIN</label>
         <input type="text" id="f_asin" placeholder="任意">
       </div>
@@ -704,15 +696,6 @@
     <h3 id="bulkEditModalTitle">選択した商品を一括編集</h3>
     <p class="note">変更したい項目だけ「変更しない」以外を選んでください。「変更しない」のままの項目は元の値が保たれます。</p>
     <div class="form-grid">
-      <div class="field">
-        <label>ステータス</label>
-        <select id="bulk_status">
-          <option value="">変更しない</option>
-          <option value="stock">在庫</option>
-          <option value="listed">販売中</option>
-          <option value="sold">売却済み</option>
-        </select>
-      </div>
       <div class="field">
         <label>プラットフォーム</label>
         <select id="bulk_platform">
@@ -1444,7 +1427,7 @@
   function openBulkEditModal(ids) {
     bulkEditIds = ids;
     document.getElementById("bulkEditModalTitle").textContent = "選択した商品を一括編集（" + ids.length + "件）";
-    ["bulk_status", "bulk_platform", "bulk_productType", "bulk_plannedPlatform", "bulk_plannedCondition", "bulk_inspected", "bulk_disposed"].forEach(function (id) {
+    ["bulk_platform", "bulk_productType", "bulk_plannedPlatform", "bulk_plannedCondition", "bulk_inspected", "bulk_disposed"].forEach(function (id) {
       document.getElementById(id).value = "";
     });
     document.getElementById("bulkEditModalBackdrop").classList.add("active");
@@ -1466,7 +1449,6 @@
   document.getElementById("btnBulkEditSave").addEventListener("click", function () {
     if (!bulkEditIds.length) return;
 
-    var statusVal = document.getElementById("bulk_status").value;
     var platformVal = document.getElementById("bulk_platform").value;
     var productTypeVal = document.getElementById("bulk_productType").value;
     var plannedPlatformVal = document.getElementById("bulk_plannedPlatform").value;
@@ -1474,7 +1456,7 @@
     var inspectedVal = document.getElementById("bulk_inspected").value;
     var disposedVal = document.getElementById("bulk_disposed").value;
 
-    if (!statusVal && !platformVal && !productTypeVal && !plannedPlatformVal && !plannedConditionVal && !inspectedVal && !disposedVal) {
+    if (!platformVal && !productTypeVal && !plannedPlatformVal && !plannedConditionVal && !inspectedVal && !disposedVal) {
       alert("変更する項目を1つ以上選んでください。");
       return;
     }
@@ -1483,7 +1465,6 @@
 
     state.items.forEach(function (item) {
       if (bulkEditIds.indexOf(item.id) === -1) return;
-      if (statusVal) item.status = statusVal;
       if (platformVal) item.platform = platformVal;
       if (productTypeVal) item.productType = productTypeVal;
       if (plannedPlatformVal) item.plannedPlatform = plannedPlatformVal;
@@ -1727,6 +1708,14 @@
     return v === "" ? 0 : Number(v);
   }
 
+  // ステータスは編集モーダルでは直接選択させず、売上日・販売日の入力状況から
+  // 自動的に決まる（売上日あり→売却済み、販売日のみ→販売中、どちらも無し→在庫）。
+  function computeStatusFromDates() {
+    if (document.getElementById("f_saleDate").value) return "sold";
+    if (document.getElementById("f_listingStartDate").value) return "listed";
+    return "stock";
+  }
+
   // Builds an item-shaped draft straight from the current form inputs, so the same
   // profit/ROI helpers used elsewhere in the app can preview figures before saving.
   function readItemFormAsDraft() {
@@ -1734,7 +1723,7 @@
     // preview still falls back correctly for items saved before 獲得ポイント existed.
     var existingItem = state.editingId ? state.items.find(function (i) { return i.id === state.editingId; }) : null;
     return {
-      status: document.getElementById("f_status").value,
+      status: computeStatusFromDates(),
       purchasePrice: numVal("f_purchasePrice"),
       purchaseShipping: numVal("f_purchaseShipping"),
       purchasePointsUsed: numVal("f_purchasePointsUsed"),
@@ -1784,7 +1773,7 @@
       "<br>販売日数: " + (days === null ? "—" : days + "日");
   }
 
-  ITEM_CALC_FIELD_IDS.concat(["f_status"]).forEach(function (id) {
+  ITEM_CALC_FIELD_IDS.forEach(function (id) {
     document.getElementById(id).addEventListener("input", updateItemModalComputed);
   });
 
@@ -1798,23 +1787,6 @@
     }
   });
 
-  // 日付を入力するとステータスを自動的に進める（在庫→販売中→売却済み）。
-  // 逆方向（日付を消したらステータスを戻す）は、意図しない格下げを避けるため行わない。
-  document.getElementById("f_listingStartDate").addEventListener("change", function () {
-    var statusSel = document.getElementById("f_status");
-    if (this.value && statusSel.value === "stock") {
-      statusSel.value = "listed";
-      updateItemModalComputed();
-    }
-  });
-
-  document.getElementById("f_saleDate").addEventListener("change", function () {
-    if (this.value) {
-      document.getElementById("f_status").value = "sold";
-      updateItemModalComputed();
-    }
-  });
-
   function openItemModal(id) {
     state.editingId = id || null;
     var item = id ? state.items.find(function (i) { return i.id === id; }) : null;
@@ -1823,7 +1795,6 @@
     document.getElementById("f_name").value = item ? item.name : "";
     document.getElementById("f_supplier").value = item ? item.supplier : "";
     document.getElementById("f_platform").value = item ? item.platform : state.platforms[0];
-    document.getElementById("f_status").value = item ? item.status : "stock";
     document.getElementById("f_asin").value = item ? item.asin || "" : "";
     document.getElementById("f_productType").value = item ? item.productType || "" : "";
     document.getElementById("f_inspected").checked = !!(item && item.inspected);
@@ -1883,7 +1854,7 @@
       name: name,
       supplier: document.getElementById("f_supplier").value.trim(),
       platform: document.getElementById("f_platform").value,
-      status: document.getElementById("f_status").value,
+      status: computeStatusFromDates(),
       asin: document.getElementById("f_asin").value.trim(),
       productType: document.getElementById("f_productType").value.trim(),
       inspected: document.getElementById("f_inspected").checked,
